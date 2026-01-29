@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  --fc-bg: #fafafa;
+  --fc-surface: #ffffff;
+  --fc-border: #e5e7eb;
+  --fc-ink: #111827;
+  --fc-ink-muted: #6b7280;
+  --fc-brand: #10b981;
+  --fc-brand-dark: #059669;
+  --fc-brand-soft: #ecfdf5;
+  --fc-star: #facc15;
+}
+
+@theme inline {
+  --color-background: var(--fc-bg);
+  --color-foreground: var(--fc-ink);
+}
+
+body {
+  background: var(--fc-bg);
+  color: var(--fc-ink);
+  font-family: var(--font-body), "Inter", "Segoe UI", sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-body), "Inter", "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: var(--fc-brand-soft);
+}
