@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Bytes, Env};
 
 // TTL Constants
 pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
@@ -32,6 +32,8 @@ pub enum DataKey {
     TotalSupply,
     TotalRetired,
     Initialized,
+    VerifierRegistry,
+    UsedReportHash(Bytes),
 }
 
 pub fn is_initialized(e: &Env) -> bool {
@@ -62,4 +64,24 @@ pub fn read_total_retired(e: &Env) -> i128 {
 pub fn write_total_retired(e: &Env, amount: i128) {
     let key = DataKey::TotalRetired;
     e.storage().instance().set(&key, &amount);
+}
+
+pub fn write_verifier_registry(e: &Env, addr: &Address) {
+    let key = DataKey::VerifierRegistry;
+    e.storage().instance().set(&key, addr);
+}
+
+pub fn read_verifier_registry(e: &Env) -> Address {
+    let key = DataKey::VerifierRegistry;
+    e.storage().instance().get(&key).unwrap_or_else(|| panic!("verifier registry not set"))
+}
+
+pub fn is_report_hash_used(e: &Env, report_hash: &Bytes) -> bool {
+    let key = DataKey::UsedReportHash(report_hash.clone());
+    e.storage().instance().has(&key)
+}
+
+pub fn mark_report_hash_used(e: &Env, report_hash: &Bytes) {
+    let key = DataKey::UsedReportHash(report_hash.clone());
+    e.storage().instance().set(&key, &true);
 }

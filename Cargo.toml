@@ -6,6 +6,7 @@ members = [
 
 [workspace.dependencies]
 soroban-sdk = "20.3.2"
+verifier-registry = { path = "contracts/verifier_registry" }
 
 [profile.release]
 opt-level = "z"

@@ -8,7 +8,7 @@ mod metadata;
 mod storage;
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String};
 
 use crate::admin::{read_administrator, write_administrator};
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
@@ -18,7 +18,45 @@ use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
 use crate::storage::{
     is_initialized, read_total_retired, read_total_supply, set_initialized, write_total_retired,
     write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
+    write_verifier_registry, read_verifier_registry, is_report_hash_used, mark_report_hash_used,
 };
+
+// Verifier Registry client for cross-contract calls - re-exported for testing
+pub mod verifier_registry {
+    use soroban_sdk::{contractclient, Address, Bytes, Env};
+
+    #[contractclient(name = "VerifierRegistryClient")]
+    pub trait VerifierRegistry {
+        fn initialize(env: Env, admin: Address);
+        fn add_verifier(env: Env, verifier: Address);
+        fn log_verification(env: Env, verifier: Address, report_hash: Bytes, farmer: Address, amount: i128);
+        fn verify_report(env: Env, report_hash: Bytes) -> Option<VerificationReport>;
+        fn mark_report_used(env: Env, report_hash: Bytes);
+        fn is_report_used(env: Env, report_hash: Bytes) -> bool;
+        fn is_verifier(env: Env, addr: Address) -> bool;
+    }
+
+    #[soroban_sdk::contracttype]
+    #[derive(Clone)]
+    pub struct VerificationReport {
+        pub report_hash: Bytes,
+        pub verifier: Address,
+        pub farmer: Address,
+        pub amount: i128,
+        pub timestamp: u64,
+        pub used: bool,
+    }
+}
+
+fn verify_report_with_registry(env: &Env, registry_addr: &Address, report_hash: &Bytes) -> Option<verifier_registry::VerificationReport> {
+    let client = verifier_registry::VerifierRegistryClient::new(env, registry_addr);
+    client.verify_report(report_hash)
+}
+
+fn mark_report_used_in_registry(env: &Env, registry_addr: &Address, report_hash: &Bytes) {
+    let client = verifier_registry::VerifierRegistryClient::new(env, registry_addr);
+    client.mark_report_used(report_hash)
+}
 
 fn check_nonnegative_amount(amount: i128) {
     if amount < 0 {
@@ -31,23 +69,24 @@ pub struct CarbonCreditToken;
 
 #[contractimpl]
 impl CarbonCreditToken {
-    /// Initializes the contract with admin and metadata.
+    /// Initializes the contract with admin, metadata, and verifier registry.
     /// Can only be called once.
-    pub fn initialize(env: Env, admin: Address, name: String, symbol: String, decimals: u32) {
+    pub fn initialize(env: Env, admin: Address, verifier_registry: Address, name: String, symbol: String, decimals: u32) {
         if is_initialized(&env) {
             panic!("contract already initialized");
         }
 
         set_initialized(&env);
         write_administrator(&env, &admin);
+        write_verifier_registry(&env, &verifier_registry);
         write_metadata(&env, name, symbol, decimals);
         write_total_supply(&env, 0);
         write_total_retired(&env, 0);
     }
 
     /// Mints tokens to an address (Admin only).
-    /// Used to credit verified donations.
-    pub fn mint(env: Env, to: Address, amount: i128) {
+    /// Requires a report_hash from a verified verification report in the verifier registry.
+    pub fn mint(env: Env, to: Address, report_hash: Bytes, amount: i128) {
         check_nonnegative_amount(amount);
 
         let admin = read_administrator(&env);
@@ -56,6 +95,32 @@ impl CarbonCreditToken {
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        // Get the verifier registry address
+        let verifier_registry = read_verifier_registry(&env);
+
+        // Call the verifier registry to verify the report_hash exists and is valid
+        let verification = verify_report_with_registry(&env, &verifier_registry, &report_hash);
+        
+        if let Some(report) = verification {
+            // Check if the report has already been used for minting
+            if report.used {
+                panic!("report_hash has already been used for minting");
+            }
+        } else {
+            panic!("report_hash not found in verifier registry");
+        }
+
+        // Check if this specific token contract has already used this report_hash
+        if is_report_hash_used(&env, &report_hash) {
+            panic!("report_hash has already been used for minting");
+        }
+
+        // Mark the report_hash as used
+        mark_report_hash_used(&env, &report_hash);
+
+        // Also mark it as used in the verifier registry
+        mark_report_used_in_registry(&env, &verifier_registry, &report_hash);
 
         receive_balance(&env, to.clone(), amount);
 
