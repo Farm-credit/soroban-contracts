@@ -1,22 +1,34 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env, Vec,
+    contract, contractimpl, contracttype, Address, Env,
 };
 
 mod storage {
-    use soroban_sdk::{Env, Vec, Address};
+    use soroban_sdk::{Env, Address};
 
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
 
     const OFFERS_PREFIX: &str = "offers";
     const OFFER_COUNT_KEY: &str = "offer_count";
+    const INITIALIZED_KEY: &str = "initialized";
 
     pub fn extend_ttl(env: &Env) {
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+    }
+
+    pub fn is_initialized(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<_, bool>(&INITIALIZED_KEY)
+            .unwrap_or(false)
+    }
+
+    pub fn set_initialized(env: &Env) {
+        env.storage().instance().set(&INITIALIZED_KEY, &true);
     }
 
     pub fn read_offer_count(env: &Env) -> u64 {
@@ -112,9 +124,10 @@ impl EscrowContract {
     /// Initialize the escrow contract
     pub fn initialize(env: Env) {
         storage::extend_ttl(&env);
-        if storage::read_offer_count(&env) != 0 {
+        if storage::is_initialized(&env) {
             panic!("escrow already initialized");
         }
+        storage::set_initialized(&env);
         storage::write_offer_count(&env, 0);
     }
 
