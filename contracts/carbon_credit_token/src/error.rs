@@ -4,40 +4,26 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    AlreadyInitialized = 1,
-    NegativeAmount = 2,
-    Blacklisted = 3,
-    CannotBlacklistSelf = 4,
-    InvalidSuccessor = 5,
-    ZeroRetirementAmount = 6,
-    InsufficientBalance = 7,
-    InsufficientAllowance = 8,
-    InvalidExpirationLedger = 9,
-}
-use soroban_sdk::contracterror;
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
     /// The provided amount is negative.
     NegativeAmount = 1,
     /// The account does not have enough balance.
     InsufficientBalance = 2,
-    /// The spender does not have enough allowance.
+    /// The allowance is not enough for the transfer.
     InsufficientAllowance = 3,
-    /// The contract has already been initialized.
+    /// The contract is already initialized.
     AlreadyInitialized = 4,
-    /// The retirement amount must be greater than zero.
-    ZeroRetirementAmount = 5,
-    /// The allowance expiration ledger is in the past while amount > 0.
-    InvalidExpirationLedger = 6,
-    /// Caller is not the SuperAdmin.
+    /// The provided expiration ledger is invalid (in the past).
+    InvalidExpirationLedger = 5,
+    /// The address is blacklisted.
+    Blacklisted = 6,
+    /// Caller is not authorized.
     Unauthorized = 7,
-    /// The address is blacklisted and cannot perform this action.
-    Blacklisted = 8,
-    /// SuperAdmin cannot blacklist themselves without first transferring the role.
-    CannotBlacklistSelf = 9,
-    /// The successor address must differ from the current SuperAdmin.
-    InvalidSuccessor = 10,
+    /// Retirement amount must be greater than zero.
+    ZeroRetirementAmount = 8,
+    /// The successor address for super admin is invalid.
+    InvalidSuccessor = 9,
+    /// Only the SuperAdmin can blacklist/unblacklist themselves.
+    CannotBlacklistSelf = 10,
+    /// The report hash has already been used.
+    ReportHashUsed = 11,
 }

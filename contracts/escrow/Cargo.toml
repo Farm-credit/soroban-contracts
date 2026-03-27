@@ -4,17 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-carbon_credit_token = { path = "../carbon_credit_token" }
 soroban-sdk = { workspace = true }
+carbon_credit_token = { path = "../carbon_credit_token" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 doctest = false
 
-[dependencies]
-soroban-sdk = { workspace = true }
-carbon-credit-token = { workspace = true }
-
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-carbon-credit-token = { path = "../carbon_credit_token" }
+carbon_credit_token = { path = "../carbon_credit_token" }

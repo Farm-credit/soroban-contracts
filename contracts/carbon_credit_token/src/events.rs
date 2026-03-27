@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, String};
 
 #[derive(Clone, Debug)]
 #[contracttype]
@@ -66,7 +66,10 @@ impl ApproveEvent {
 pub struct RetirementData {
     pub amount: i128,
     pub timestamp: u64,
+    pub report_hash: Bytes,
+    pub methodology: String,
 }
+
 
 #[derive(Clone, Debug)]
 #[contracttype]
@@ -74,15 +77,21 @@ pub struct RetirementEvent {
     pub from: Address,
     pub amount: i128,
     pub timestamp: u64,
+    pub report_hash: Bytes,
+    pub methodology: String,
 }
+
 
 impl RetirementEvent {
     pub fn publish(self, env: &Env) {
         let data = RetirementData {
             amount: self.amount,
             timestamp: self.timestamp,
+            report_hash: self.report_hash,
+            methodology: self.methodology,
         };
         env.events()
             .publish((symbol_short!("retire"), self.from), data);
     }
 }
+
