@@ -76,4 +76,14 @@ pub fn unblacklist_address(e: &Env, addr: &Address) {
     e.storage()
         .persistent()
         .remove(&DataKey::Blacklisted(addr.clone()));
+
+    crate::events::blacklist_removed(e, e.invoker(), addr.clone());
+}
+
+pub fn blacklist_address(e: &Env, addr: &Address) {
+    e.storage()
+        .persistent()
+        .set(&DataKey::Blacklisted(addr.clone()), &true);
+
+    crate::events::blacklist_added(e, e.invoker(), addr.clone());
 }

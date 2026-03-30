@@ -113,3 +113,12 @@ impl CertificateGeneratedEvent {
     }
 }
 
+pub fn blacklist_added(env: &Env, admin: Address, account: Address) {
+    env.events()
+        .publish((symbol_short!("blacklist_add"), admin, account), ());
+}
+
+pub fn blacklist_removed(env: &Env, admin: Address, account: Address) {
+    env.events()
+        .publish((symbol_short!("blacklist_rm"), admin, account), ());
+}
