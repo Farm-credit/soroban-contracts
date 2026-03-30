@@ -148,6 +148,125 @@ fn test_deactivate_verifier_not_registered() {
     assert_eq!(result, Err(Ok(Error::VerifierNotRegistered)));
 }
 
+// ============ REACTIVATE VERIFIER TESTS ============
+
+#[test]
+fn test_reactivate_verifier() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let super_admin = Address::generate(&env);
+    let registry = create_registry(&env, &super_admin);
+
+    let verifier = Address::generate(&env);
+    let name = String::from_str(&env, "Test Verifier");
+    let jurisdiction = String::from_str(&env, "USA");
+
+    // Register and deactivate
+    registry.register_verifier(&verifier, &name, &jurisdiction);
+    registry.deactivate_verifier(&verifier);
+    assert!(!registry.is_verifier_active(&verifier));
+
+    // Reactivate
+    registry.reactivate_verifier(&verifier);
+    assert!(registry.is_verifier_active(&verifier));
+
+    // Verify profile is still intact
+    let profile = registry.get_verifier_profile(&verifier);
+    assert!(profile.is_some());
+    let (returned_name, returned_jurisdiction, _, is_active) = profile.unwrap();
+    assert_eq!(returned_name, name);
+    assert_eq!(returned_jurisdiction, jurisdiction);
+    assert!(is_active);
+}
+
+#[test]
+fn test_reactivate_verifier_not_registered() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let super_admin = Address::generate(&env);
+    let registry = create_registry(&env, &super_admin);
+
+    let verifier = Address::generate(&env);
+
+    let result = registry.try_reactivate_verifier(&verifier);
+    assert_eq!(result, Err(Ok(Error::VerifierNotRegistered)));
+}
+
+#[test]
+fn test_reactivate_verifier_already_active() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let super_admin = Address::generate(&env);
+    let registry = create_registry(&env, &super_admin);
+
+    let verifier = Address::generate(&env);
+    let name = String::from_str(&env, "Test Verifier");
+    let jurisdiction = String::from_str(&env, "USA");
+
+    registry.register_verifier(&verifier, &name, &jurisdiction);
+    assert!(registry.is_verifier_active(&verifier));
+
+    // Try to reactivate an already active verifier
+    let result = registry.try_reactivate_verifier(&verifier);
+    assert_eq!(result, Err(Ok(Error::VerifierAlreadyActive)));
+}
+
+#[test]
+fn test_deactivated_verifier_cannot_submit_reports() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let super_admin = Address::generate(&env);
+    let registry = create_registry(&env, &super_admin);
+
+    let verifier = Address::generate(&env);
+    let name = String::from_str(&env, "Test Verifier");
+    let jurisdiction = String::from_str(&env, "USA");
+
+    registry.register_verifier(&verifier, &name, &jurisdiction);
+    registry.deactivate_verifier(&verifier);
+
+    let farmer = Address::generate(&env);
+    let metric_hash = String::from_str(&env, "0xabcdef1234567890abcdef1234567890");
+
+    // Deactivated verifier should not be able to submit reports
+    let result = registry.try_submit_report_hash_with_verifier(&verifier, &farmer, &metric_hash);
+    assert_eq!(result, Err(Ok(Error::VerifierNotRegistered)));
+}
+
+#[test]
+fn test_reactivated_verifier_can_submit_reports() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let super_admin = Address::generate(&env);
+    let registry = create_registry(&env, &super_admin);
+
+    let verifier = Address::generate(&env);
+    let name = String::from_str(&env, "Test Verifier");
+    let jurisdiction = String::from_str(&env, "USA");
+
+    // Register, deactivate, then reactivate
+    registry.register_verifier(&verifier, &name, &jurisdiction);
+    registry.deactivate_verifier(&verifier);
+    registry.reactivate_verifier(&verifier);
+
+    let farmer = Address::generate(&env);
+    let metric_hash = String::from_str(&env, "0xabcdef1234567890abcdef1234567890");
+
+    // Reactivated verifier should be able to submit reports
+    registry.submit_report_hash_with_verifier(&verifier, &farmer, &metric_hash);
+
+    let report = registry.get_farmer_report(&farmer);
+    assert!(report.is_some());
+    let (report_verifier, report_hash, _) = report.unwrap();
+    assert_eq!(report_verifier, verifier);
+    assert_eq!(report_hash, metric_hash);
+}
+
 // ============ SUBMIT REPORT HASH TESTS ============
 
 #[test]

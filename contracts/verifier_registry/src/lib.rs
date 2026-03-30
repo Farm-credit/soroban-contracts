@@ -90,6 +90,46 @@ impl VerifierRegistry {
 
         unregister_verifier(&env, &verifier);
 
+        // Emit deactivation event for audit trail
+        env.events().publish(
+            (soroban_sdk::symbol_short!("deactiv"),),
+            &verifier,
+        );
+
+        Ok(())
+    }
+
+    /// Reactivates a previously deactivated verifier.
+    /// Only the SuperAdmin can call this.
+    pub fn reactivate_verifier(env: Env, verifier: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+
+        // Extend TTL for storage
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        // Check if verifier profile exists
+        let mut profile = read_verifier_profile(&env, &verifier)
+            .ok_or(Error::VerifierNotRegistered)?;
+
+        // Check if already active
+        if profile.is_active && is_verifier_registered(&env, &verifier) {
+            return Err(Error::VerifierAlreadyActive);
+        }
+
+        // Reactivate the verifier
+        profile.is_active = true;
+        storage::write_verifier_profile(&env, &verifier, &profile);
+        register_verifier(&env, &verifier);
+
+        // Emit reactivation event for audit trail
+        env.events().publish(
+            (soroban_sdk::symbol_short!("reactiv"),),
+            &verifier,
+        );
+
         Ok(())
     }
 
