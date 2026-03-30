@@ -1,9 +1,9 @@
 #![cfg(test)]
 
-use crate::{CarbonCreditToken, CarbonCreditTokenClient};
+use crate::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, Env, String,
+    Address, Bytes, Env, String,
 };
 
 use crate::error::Error;

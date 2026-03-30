@@ -182,6 +182,30 @@ pub fn write_total_retired(e: &Env, amount: i128) {
         .set(&DataKey::TotalRetired, &amount);
 }
 
+pub fn read_verifier_registry(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .get(&DataKey::VerifierRegistry)
+        .expect("verifier registry address not set")
+}
+
+pub fn write_verifier_registry(e: &Env, registry: &Address) {
+    e.storage()
+        .instance()
+        .set(&DataKey::VerifierRegistry, registry);
+}
+
+pub fn is_report_hash_used(e: &Env, hash: &Bytes) -> bool {
+    e.storage()
+        .instance()
+        .has(&DataKey::UsedReportHash(hash.clone()))
+}
+
+pub fn mark_report_hash_used(e: &Env, hash: &Bytes) {
+    e.storage()
+        .instance()
+        .set(&DataKey::UsedReportHash(hash.clone()), &true);
+}
 // ── Offset Certificates ────────────────────────────────────────────────────────
 pub fn read_certificate_count(e: &Env) -> u64 {
     e.storage()
