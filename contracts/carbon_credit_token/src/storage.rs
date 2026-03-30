@@ -58,6 +58,9 @@ pub enum DataKey {
     VerifierRegistry,
     UsedReportHash(Bytes),
 
+    // Pause flag
+    Paused,
+
     // Offset Certificates
     CertificateCount,
     Certificates(Address),
@@ -241,5 +244,17 @@ pub fn write_certificate(e: &Env, corporate: Address, cert: OffsetCertificate) {
     e.storage()
         .persistent()
         .extend_ttl(&DataKey::Certificates(corporate.clone()), 17280, 518400);
+}
+
+// ── Pause ──────────────────────────────────────────────────────────────────────
+pub fn is_paused(e: &Env) -> bool {
+    e.storage()
+        .instance()
+        .get::<DataKey, bool>(&DataKey::Paused)
+        .unwrap_or(false)
+}
+
+pub fn set_paused(e: &Env, paused: bool) {
+    e.storage().instance().set(&DataKey::Paused, &paused);
 }
 

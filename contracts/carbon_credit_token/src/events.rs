@@ -113,3 +113,29 @@ impl CertificateGeneratedEvent {
     }
 }
 
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct PauseEvent {
+    pub admin: Address,
+}
+
+impl PauseEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish((symbol_short!("paused"), self.admin), true);
+    }
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct UnpauseEvent {
+    pub admin: Address,
+}
+
+impl UnpauseEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish((symbol_short!("unpaused"), self.admin), false);
+    }
+}
+

@@ -13,6 +13,8 @@ mod storage {
     const OFFERS_PREFIX: &str = "offers";
     const OFFER_COUNT_KEY: &str = "offer_count";
     const INITIALIZED_KEY: &str = "initialized";
+    const PAUSED_KEY: &str = "paused";
+    const SUPER_ADMIN_KEY: &str = "super_admin";
 
     pub fn extend_ttl(env: &Env) {
         env.storage()
@@ -56,6 +58,28 @@ mod storage {
         let key = (OFFERS_PREFIX.as_bytes(), offer_id);
         env.storage().instance().remove(&key);
     }
+
+    pub fn is_paused(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get::<_, bool>(&PAUSED_KEY)
+            .unwrap_or(false)
+    }
+
+    pub fn set_paused(env: &Env, paused: bool) {
+        env.storage().instance().set(&PAUSED_KEY, &paused);
+    }
+
+    pub fn write_super_admin(env: &Env, admin: &Address) {
+        env.storage().instance().set(&SUPER_ADMIN_KEY, admin);
+    }
+
+    pub fn read_super_admin(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&SUPER_ADMIN_KEY)
+            .expect("super admin not set")
+    }
 }
 
 #[derive(Clone)]
@@ -92,19 +116,56 @@ impl Offer {
     }
 }
 
+fn require_not_paused(env: &Env) {
+    if storage::is_paused(env) {
+        panic!("contract is paused");
+    }
+}
+
 #[contract]
 pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
-    /// Initialize the escrow contract
-    pub fn initialize(env: Env) {
+    /// Initialize the escrow contract. `super_admin` is the only address
+    /// that can pause/unpause the contract.
+    pub fn initialize(env: Env, super_admin: Address) {
         storage::extend_ttl(&env);
         if storage::is_initialized(&env) {
             panic!("escrow already initialized");
         }
         storage::set_initialized(&env);
+        storage::write_super_admin(&env, &super_admin);
         storage::write_offer_count(&env, 0);
+    }
+
+    /// Pause all state-mutating operations. SuperAdmin only.
+    pub fn admin_pause(env: Env, admin: Address) {
+        admin.require_auth();
+        let super_admin = storage::read_super_admin(&env);
+        if admin != super_admin {
+            panic!("only super admin can pause");
+        }
+        storage::extend_ttl(&env);
+        storage::set_paused(&env, true);
+        env.events().publish(("paused",), admin);
+    }
+
+    /// Unpause the contract. SuperAdmin only.
+    pub fn admin_unpause(env: Env, admin: Address) {
+        admin.require_auth();
+        let super_admin = storage::read_super_admin(&env);
+        if admin != super_admin {
+            panic!("only super admin can unpause");
+        }
+        storage::extend_ttl(&env);
+        storage::set_paused(&env, false);
+        env.events().publish(("unpaused",), admin);
+    }
+
+    /// Returns whether the contract is currently paused.
+    pub fn paused(env: Env) -> bool {
+        storage::is_paused(&env)
     }
 
     /// Create a new offer - seller deposits Carbon tokens into escrow.
@@ -120,6 +181,7 @@ impl EscrowContract {
         expiration_ledger: u32,
     ) -> u64 {
         seller.require_auth();
+        require_not_paused(&env);
 
         if carbon_amount <= 0 || usdc_amount <= 0 {
             panic!("amounts must be positive");
@@ -165,6 +227,7 @@ impl EscrowContract {
     /// Supports partial fills. Rejects fills on expired offers.
     pub fn fill_offer(env: Env, offer_id: u64, buyer: Address, fill_carbon_amount: i128) {
         buyer.require_auth();
+        require_not_paused(&env);
 
         if fill_carbon_amount <= 0 {
             panic!("fill amount must be positive");
@@ -221,6 +284,7 @@ impl EscrowContract {
     /// Returns remaining carbon tokens to seller.
     pub fn cancel_offer(env: Env, offer_id: u64, caller: Address) {
         caller.require_auth();
+        require_not_paused(&env);
 
         storage::extend_ttl(&env);
 
@@ -253,6 +317,7 @@ impl EscrowContract {
     /// Anyone can call this, but tokens always return to the seller.
     /// Cleans up ledger storage for the expired offer.
     pub fn reclaim_expired(env: Env, offer_id: u64) {
+        require_not_paused(&env);
         storage::extend_ttl(&env);
 
         let offer = storage::get_offer(&env, offer_id).expect("offer not found");
@@ -284,6 +349,7 @@ impl EscrowContract {
     /// `new_expiration_ledger` must be greater than the current expiration.
     pub fn extend_offer_expiration(env: Env, offer_id: u64, seller: Address, new_expiration_ledger: u32) {
         seller.require_auth();
+        require_not_paused(&env);
 
         storage::extend_ttl(&env);
 

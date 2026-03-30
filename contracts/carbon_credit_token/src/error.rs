@@ -26,4 +26,6 @@ pub enum Error {
     CannotBlacklistSelf = 10,
     /// The report hash has already been used.
     ReportHashUsed = 11,
+    /// The contract is paused.
+    ContractPaused = 12,
 }
