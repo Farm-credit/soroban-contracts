@@ -6,8 +6,6 @@ use soroban_sdk::{
     Address, Bytes, Env, String,
 };
 
-use crate::error::Error;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Mock RBAC Contract
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,7 +16,6 @@ pub struct MockRbacContract;
 #[soroban_sdk::contractimpl]
 impl MockRbacContract {
     pub fn has_role(_env: Env, _address: Address, _role: String) -> bool {
-
         true // Mock: everyone is a verifier for tests
     }
 }
@@ -41,9 +38,9 @@ fn setup() -> (
     let token_id = env.register_contract(None, CarbonCreditToken);
     let token = CarbonCreditTokenClient::new(&env, &token_id);
 
-    let admin    = Address::generate(&env);
+    let admin = Address::generate(&env);
     let verifier = Address::generate(&env);
-    let user     = Address::generate(&env);
+    let user = Address::generate(&env);
 
     token.initialize(
         &admin,
@@ -60,32 +57,36 @@ fn setup() -> (
 
 #[test]
 fn test_retire_and_certificate_issuance() {
-    let (_env, token, _, verifier, user) = setup();
+    let (env, token, _, verifier, user) = setup();
 
-    
+    let hash1 = Bytes::from_slice(&env, b"report_hash_1234");
+    let hash2 = Bytes::from_slice(&env, b"report_hash_5678");
+    let hash3 = Bytes::from_slice(&env, b"report_hash_9999");
+    let methodology = String::from_str(&env, "VCS");
+
     // Mint some tokens
-    token.mint(&verifier, &user, &1000);
+    token.mint(&verifier, &user, &1000, &hash1);
     assert_eq!(token.balance(&user), 1000);
 
     // Retire some tokens
-    token.retire(&user, &300);
-    
+    token.retire(&user, &300, &hash2, &methodology);
+
     assert_eq!(token.balance(&user), 700);
     assert_eq!(token.total_retired(), 300);
 
     // Check certificate issuance
     let certs = token.get_certificates(&user);
     assert_eq!(certs.len(), 1);
-    
+
     let cert = certs.get(0).unwrap();
     assert_eq!(cert.id, 1);
     assert_eq!(cert.amount, 300);
     assert!(cert.timestamp > 0);
-    
+
     assert_eq!(token.get_certificate_count(), 1);
 
     // Retire more
-    token.retire(&user, &200);
+    token.retire(&user, &200, &hash3, &methodology);
     let certs2 = token.get_certificates(&user);
     assert_eq!(certs2.len(), 2);
     assert_eq!(certs2.get(1).unwrap().amount, 200);

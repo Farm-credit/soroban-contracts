@@ -1,9 +1,5 @@
 use soroban_sdk::{contracttype, Address, Env};
 
-// Storage TTL bump values used to keep state around during upgrades.
-pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
-pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
-
 // ── Role Types ───────────────────────────────────────────────────────────────
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 #[contracttype]
@@ -30,9 +26,7 @@ pub fn is_initialized(e: &Env) -> bool {
 }
 
 pub fn set_initialized(e: &Env) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    e.storage().instance().set(&DataKey::Initialized, &true);
 }
 
 // ── SuperAdmin ────────────────────────────────────────────────────────────────
@@ -67,13 +61,6 @@ pub fn remove_role(e: &Env, address: &Address) {
 }
 
 // ── Role Write Helpers ───────────────────────────────────────────────────────
-pub fn read_admin(e: &Env, address: &Address) -> bool {
-    e.storage()
-        .instance()
-        .get::<_, bool>(&DataKey::Admin(address.clone()))
-        .unwrap_or(false)
-}
-
 pub fn write_admin(e: &Env, address: &Address) {
     e.storage()
         .instance()
@@ -100,17 +87,8 @@ pub fn is_super_admin(e: &Env, address: &Address) -> bool {
 }
 
 pub fn is_admin(e: &Env, address: &Address) -> bool {
-    // Both SuperAdmin and Admin satisfy the "is_admin" check in most contexts
-    match read_role(e, address) {
-        Some(RoleType::SuperAdmin) | Some(RoleType::Admin) => true,
-        _ => false,
-    }
-}
-
-pub fn is_verifier(e: &Env, address: &Address) -> bool {
-    matches!(read_role(e, address), Some(RoleType::Verifier))
-}
-
-pub fn is_trader(e: &Env, address: &Address) -> bool {
-    matches!(read_role(e, address), Some(RoleType::Trader))
+    matches!(
+        read_role(e, address),
+        Some(RoleType::SuperAdmin) | Some(RoleType::Admin)
+    )
 }
