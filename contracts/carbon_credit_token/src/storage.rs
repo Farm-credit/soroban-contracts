@@ -8,7 +8,6 @@ pub struct OffsetCertificate {
     pub timestamp: u64,
 }
 
-
 // ── TTL Constants ──────────────────────────────────────────────────────────────
 pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
@@ -63,24 +62,19 @@ pub enum DataKey {
     Certificates(Address),
 }
 
-
 // ── Initialization ─────────────────────────────────────────────────────────────
 pub fn is_initialized(e: &Env) -> bool {
     e.storage().instance().has(&DataKey::Initialized)
 }
 
 pub fn set_initialized(e: &Env) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    e.storage().instance().set(&DataKey::Initialized, &true);
 }
 
 // ── RBAC Contract ──────────────────────────────────────────────────────────────
 /// Persists the external RBAC contract address used for role-based minting checks.
 pub fn write_rbac_contract(e: &Env, rbac_id: &Address) {
-    e.storage()
-        .instance()
-        .set(&DataKey::RbacContract, rbac_id);
+    e.storage().instance().set(&DataKey::RbacContract, rbac_id);
 }
 
 /// Reads the registered RBAC contract address.
@@ -164,9 +158,7 @@ pub fn read_total_supply(e: &Env) -> i128 {
 }
 
 pub fn write_total_supply(e: &Env, amount: i128) {
-    e.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &amount);
+    e.storage().instance().set(&DataKey::TotalSupply, &amount);
 }
 
 pub fn read_total_retired(e: &Env) -> i128 {
@@ -177,9 +169,7 @@ pub fn read_total_retired(e: &Env) -> i128 {
 }
 
 pub fn write_total_retired(e: &Env, amount: i128) {
-    e.storage()
-        .instance()
-        .set(&DataKey::TotalRetired, &amount);
+    e.storage().instance().set(&DataKey::TotalRetired, &amount);
 }
 
 pub fn read_verifier_registry(e: &Env) -> Address {
@@ -236,10 +226,8 @@ pub fn write_certificate(e: &Env, corporate: Address, cert: OffsetCertificate) {
         .persistent()
         .set(&DataKey::Certificates(corporate.clone()), &certs);
 
-
     // Bump TTL for persistent storage
     e.storage()
         .persistent()
         .extend_ttl(&DataKey::Certificates(corporate.clone()), 17280, 518400);
 }
-

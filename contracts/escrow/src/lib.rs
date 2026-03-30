@@ -1,11 +1,9 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 mod storage {
-    use soroban_sdk::{Env, Address};
+    use soroban_sdk::Env;
 
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
@@ -212,7 +210,11 @@ impl EscrowContract {
         carbon_client.transfer(&env.current_contract_address(), &buyer, &fill_carbon_amount);
 
         // Transfer USDC from escrow to seller
-        usdc_client.transfer(&env.current_contract_address(), &offer.seller, &fill_usdc_amount);
+        usdc_client.transfer(
+            &env.current_contract_address(),
+            &offer.seller,
+            &fill_usdc_amount,
+        );
 
         // Update offer with filled amounts
         offer.filled_carbon += fill_carbon_amount;
@@ -226,7 +228,12 @@ impl EscrowContract {
 
         env.events().publish(
             ("offer_filled",),
-            (offer_id, buyer.clone(), fill_carbon_amount, fill_usdc_amount),
+            (
+                offer_id,
+                buyer.clone(),
+                fill_carbon_amount,
+                fill_usdc_amount,
+            ),
         );
     }
 
@@ -250,7 +257,11 @@ impl EscrowContract {
         let remaining_carbon = offer.remaining_carbon();
         if remaining_carbon > 0 {
             let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
-            carbon_client.transfer(&env.current_contract_address(), &offer.seller, &remaining_carbon);
+            carbon_client.transfer(
+                &env.current_contract_address(),
+                &offer.seller,
+                &remaining_carbon,
+            );
         }
 
         offer.is_cancelled = true;

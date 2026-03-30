@@ -8,10 +8,10 @@ pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
 #[derive(Clone)]
 #[contracttype]
 pub struct VerifierProfile {
-    pub name: String,              // Entity name
-    pub registration_date: u32,   // Registration timestamp (ledger number)
-    pub jurisdiction: String,      // Geographic jurisdiction
-    pub is_active: bool,           // Whether the verifier is active
+    pub name: String,           // Entity name
+    pub registration_date: u32, // Registration timestamp (ledger number)
+    pub jurisdiction: String,   // Geographic jurisdiction
+    pub is_active: bool,        // Whether the verifier is active
 }
 
 /// Storage keys for Verifier Registry contract
@@ -44,10 +44,7 @@ pub fn set_initialized(e: &Env) {
 
 /// Read the SuperAdmin address
 pub fn read_super_admin(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get(&DataKey::SuperAdmin)
-        .unwrap()
+    e.storage().instance().get(&DataKey::SuperAdmin).unwrap()
 }
 
 /// Write the SuperAdmin address

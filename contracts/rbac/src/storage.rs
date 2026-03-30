@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, Address, Env};
 pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
 
-// ── Role Types ───────────────────────────────────────────────────────────────
+// ── Role Types ──────────────────────────────────────────────────────────────
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 #[contracttype]
 pub enum RoleType {
@@ -30,9 +30,7 @@ pub fn is_initialized(e: &Env) -> bool {
 }
 
 pub fn set_initialized(e: &Env) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    e.storage().instance().set(&DataKey::Initialized, &true);
 }
 
 // ── SuperAdmin ────────────────────────────────────────────────────────────────
@@ -100,11 +98,10 @@ pub fn is_super_admin(e: &Env, address: &Address) -> bool {
 }
 
 pub fn is_admin(e: &Env, address: &Address) -> bool {
-    // Both SuperAdmin and Admin satisfy the "is_admin" check in most contexts
-    match read_role(e, address) {
-        Some(RoleType::SuperAdmin) | Some(RoleType::Admin) => true,
-        _ => false,
-    }
+    matches!(
+        read_role(e, address),
+        Some(RoleType::SuperAdmin) | Some(RoleType::Admin)
+    )
 }
 
 pub fn is_verifier(e: &Env, address: &Address) -> bool {
