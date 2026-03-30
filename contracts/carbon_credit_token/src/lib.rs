@@ -31,7 +31,7 @@ use crate::storage::{
     read_total_supply, set_initialized, write_rbac_contract, write_total_retired,
     write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
 };
-
+use crate::storage::{read_certificates, read_certificate_count, write_certificate};
 
 fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     if amount < 0 {
