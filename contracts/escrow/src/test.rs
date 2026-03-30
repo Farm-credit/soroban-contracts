@@ -90,7 +90,7 @@ fn test_initialize() {
 }
 
 #[test]
-#[should_panic(expected = "escrow already initialized")]
+#[should_panic(expected = "Error(Contract, #6)")]
 fn test_initialize_twice_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -119,21 +119,22 @@ fn test_create_offer_happy_path() {
 }
 
 #[test]
-#[should_panic(expected = "amounts must be positive")]
+#[should_panic(expected = "Error(Contract, #7)")]
+
 fn test_create_offer_zero_carbon_panics() {
     let s = setup();
     s.escrow.create_offer(&s.seller, &0, &5000, &s.carbon_id, &s.usdc_id);
 }
 
 #[test]
-#[should_panic(expected = "amounts must be positive")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_create_offer_zero_usdc_panics() {
     let s = setup();
     s.escrow.create_offer(&s.seller, &1000, &0, &s.carbon_id, &s.usdc_id);
 }
 
 #[test]
-#[should_panic(expected = "amounts must be positive")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_create_offer_negative_carbon_panics() {
     let s = setup();
     s.escrow.create_offer(&s.seller, &-100, &5000, &s.carbon_id, &s.usdc_id);
@@ -251,14 +252,14 @@ fn test_cancel_after_partial_fill() {
 // ── Error cases ───────────────────────────────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "offer not found")]
+#[should_panic(expected = "Error(Contract, #5)")]
 fn test_fill_nonexistent_offer_panics() {
     let s = setup();
     s.escrow.fill_offer(&999, &s.buyer, &100);
 }
 
 #[test]
-#[should_panic(expected = "fill amount must be positive")]
+#[should_panic(expected = "Error(Contract, #7)")]
 fn test_fill_zero_amount_panics() {
     let s = setup();
     let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
@@ -266,7 +267,7 @@ fn test_fill_zero_amount_panics() {
 }
 
 #[test]
-#[should_panic(expected = "fill amount exceeds remaining offer amount")]
+#[should_panic(expected = "Error(Contract, #1)")]
 fn test_fill_exceeds_remaining_panics() {
     let s = setup();
     let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
@@ -274,7 +275,7 @@ fn test_fill_exceeds_remaining_panics() {
 }
 
 #[test]
-#[should_panic(expected = "offer is cancelled")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_fill_cancelled_offer_panics() {
     let s = setup();
     let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
@@ -283,14 +284,14 @@ fn test_fill_cancelled_offer_panics() {
 }
 
 #[test]
-#[should_panic(expected = "offer not found")]
+#[should_panic(expected = "Error(Contract, #5)")]
 fn test_cancel_nonexistent_offer_panics() {
     let s = setup();
     s.escrow.cancel_offer(&999, &s.seller);
 }
 
 #[test]
-#[should_panic(expected = "only the seller can cancel this offer")]
+#[should_panic(expected = "Error(Contract, #4)")]
 fn test_cancel_by_non_seller_panics() {
     let s = setup();
     let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
@@ -299,7 +300,7 @@ fn test_cancel_by_non_seller_panics() {
 }
 
 #[test]
-#[should_panic(expected = "offer already cancelled")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_cancel_already_cancelled_panics() {
     let s = setup();
     let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
