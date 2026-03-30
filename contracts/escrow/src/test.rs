@@ -2,10 +2,7 @@
 
 use crate::{EscrowContract, EscrowContractClient, Offer};
 use carbon_credit_token::{CarbonCreditToken, CarbonCreditTokenClient};
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env, String,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 // ── Mock RBAC (grants verifier role to everyone) ─────────────────────────────
 
@@ -75,7 +72,18 @@ fn setup() -> Setup<'static> {
     carbon.mint(&admin, &seller, &10_000);
     usdc.mint(&admin, &buyer, &100_000);
 
-    Setup { env, escrow, escrow_id, carbon, carbon_id, usdc, usdc_id, admin, seller, buyer }
+    Setup {
+        env,
+        escrow,
+        escrow_id,
+        carbon,
+        carbon_id,
+        usdc,
+        usdc_id,
+        admin,
+        seller,
+        buyer,
+    }
 }
 
 // ── Initialization ────────────────────────────────────────────────────────────
@@ -105,7 +113,9 @@ fn test_initialize_twice_panics() {
 #[test]
 fn test_create_offer_happy_path() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     assert_eq!(offer_id, 1);
     // Seller's carbon reduced, escrow holds it
@@ -122,27 +132,31 @@ fn test_create_offer_happy_path() {
 #[should_panic(expected = "amounts must be positive")]
 fn test_create_offer_zero_carbon_panics() {
     let s = setup();
-    s.escrow.create_offer(&s.seller, &0, &5000, &s.carbon_id, &s.usdc_id);
+    s.escrow
+        .create_offer(&s.seller, &0, &5000, &s.carbon_id, &s.usdc_id);
 }
 
 #[test]
 #[should_panic(expected = "amounts must be positive")]
 fn test_create_offer_zero_usdc_panics() {
     let s = setup();
-    s.escrow.create_offer(&s.seller, &1000, &0, &s.carbon_id, &s.usdc_id);
+    s.escrow
+        .create_offer(&s.seller, &1000, &0, &s.carbon_id, &s.usdc_id);
 }
 
 #[test]
 #[should_panic(expected = "amounts must be positive")]
 fn test_create_offer_negative_carbon_panics() {
     let s = setup();
-    s.escrow.create_offer(&s.seller, &-100, &5000, &s.carbon_id, &s.usdc_id);
+    s.escrow
+        .create_offer(&s.seller, &-100, &5000, &s.carbon_id, &s.usdc_id);
 }
 
 #[test]
 fn test_create_offer_emits_event() {
     let s = setup();
-    s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    s.escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     // At least one event was emitted (offer_created + token transfer events)
     assert!(!s.env.events().all().is_empty());
 }
@@ -150,7 +164,9 @@ fn test_create_offer_emits_event() {
 #[test]
 fn test_fill_offer_emits_event() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     let events_before = s.env.events().all().len();
     s.escrow.fill_offer(&offer_id, &s.buyer, &500);
     assert!(s.env.events().all().len() > events_before);
@@ -159,7 +175,9 @@ fn test_fill_offer_emits_event() {
 #[test]
 fn test_cancel_offer_emits_event() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     let events_before = s.env.events().all().len();
     s.escrow.cancel_offer(&offer_id, &s.seller);
     assert!(s.env.events().all().len() > events_before);
@@ -170,7 +188,9 @@ fn test_cancel_offer_emits_event() {
 #[test]
 fn test_full_fill_happy_path() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &1000);
 
@@ -189,7 +209,9 @@ fn test_full_fill_happy_path() {
 #[test]
 fn test_partial_fill() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &400);
 
@@ -207,7 +229,9 @@ fn test_partial_fill() {
 #[test]
 fn test_multiple_partial_fills() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &300); // fill 1
     s.escrow.fill_offer(&offer_id, &s.buyer, &400); // fill 2
@@ -224,7 +248,9 @@ fn test_multiple_partial_fills() {
 #[test]
 fn test_cancel_offer_returns_tokens() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     s.escrow.cancel_offer(&offer_id, &s.seller);
 
@@ -238,7 +264,9 @@ fn test_cancel_offer_returns_tokens() {
 #[test]
 fn test_cancel_after_partial_fill() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &300);
     s.escrow.cancel_offer(&offer_id, &s.seller);
@@ -261,7 +289,9 @@ fn test_fill_nonexistent_offer_panics() {
 #[should_panic(expected = "fill amount must be positive")]
 fn test_fill_zero_amount_panics() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     s.escrow.fill_offer(&offer_id, &s.buyer, &0);
 }
 
@@ -269,7 +299,9 @@ fn test_fill_zero_amount_panics() {
 #[should_panic(expected = "fill amount exceeds remaining offer amount")]
 fn test_fill_exceeds_remaining_panics() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     s.escrow.fill_offer(&offer_id, &s.buyer, &1001);
 }
 
@@ -277,7 +309,9 @@ fn test_fill_exceeds_remaining_panics() {
 #[should_panic(expected = "offer is cancelled")]
 fn test_fill_cancelled_offer_panics() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     s.escrow.cancel_offer(&offer_id, &s.seller);
     s.escrow.fill_offer(&offer_id, &s.buyer, &100);
 }
@@ -293,7 +327,9 @@ fn test_cancel_nonexistent_offer_panics() {
 #[should_panic(expected = "only the seller can cancel this offer")]
 fn test_cancel_by_non_seller_panics() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     let non_seller = Address::generate(&s.env);
     s.escrow.cancel_offer(&offer_id, &non_seller);
 }
@@ -302,7 +338,9 @@ fn test_cancel_by_non_seller_panics() {
 #[should_panic(expected = "offer already cancelled")]
 fn test_cancel_already_cancelled_panics() {
     let s = setup();
-    let offer_id = s.escrow.create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
     s.escrow.cancel_offer(&offer_id, &s.seller);
     s.escrow.cancel_offer(&offer_id, &s.seller);
 }
@@ -364,7 +402,13 @@ fn test_create_offer_without_auth_panics() {
     {
         let env2 = env.clone();
         env2.mock_all_auths();
-        carbon.initialize(&admin, &rbac_id, &String::from_str(&env, "C"), &String::from_str(&env, "C"), &0u32);
+        carbon.initialize(
+            &admin,
+            &rbac_id,
+            &String::from_str(&env, "C"),
+            &String::from_str(&env, "C"),
+            &0u32,
+        );
     }
     let usdc_id = env.register_contract(None, CarbonCreditToken);
     let escrow_id = env.register_contract(None, EscrowContract);

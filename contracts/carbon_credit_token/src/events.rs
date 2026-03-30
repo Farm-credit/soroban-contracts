@@ -70,7 +70,6 @@ pub struct RetirementData {
     pub methodology: String,
 }
 
-
 #[derive(Clone, Debug)]
 #[contracttype]
 pub struct RetirementEvent {
@@ -80,7 +79,6 @@ pub struct RetirementEvent {
     pub report_hash: Bytes,
     pub methodology: String,
 }
-
 
 impl RetirementEvent {
     pub fn publish(self, env: &Env) {
@@ -112,4 +110,3 @@ impl CertificateGeneratedEvent {
         );
     }
 }
-
