@@ -93,6 +93,7 @@ impl CarbonCreditToken {
     pub fn add_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
@@ -105,6 +106,7 @@ impl CarbonCreditToken {
     pub fn remove_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
