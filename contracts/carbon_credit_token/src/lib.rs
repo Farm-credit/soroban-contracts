@@ -27,11 +27,11 @@ use crate::events::{
 use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
 use crate::rbac::require_verifier;
 use crate::storage::{
-    increment_certificate_count, is_initialized, is_report_hash_used, mark_report_hash_used, read_total_retired,
-    read_total_supply, set_initialized, write_rbac_contract, write_total_retired,
-    write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
+    increment_certificate_count, is_initialized, is_report_hash_used, mark_report_hash_used,
+    read_certificate_count, read_certificates, read_total_retired, read_total_supply,
+    set_initialized, write_certificate, write_rbac_contract, write_total_retired,
+    write_total_supply, OffsetCertificate, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
 };
-
 
 fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     if amount < 0 {
@@ -150,7 +150,13 @@ impl CarbonCreditToken {
 
     // ── Token operations ──────────────────────────────────────────────────────
 
-    pub fn mint(env: Env, verifier: Address, to: Address, amount: i128, report_hash: Bytes) -> Result<(), Error> {
+    pub fn mint(
+        env: Env,
+        verifier: Address,
+        to: Address,
+        amount: i128,
+        report_hash: Bytes,
+    ) -> Result<(), Error> {
         check_nonnegative_amount(amount)?;
         require_not_blacklisted(&env, &verifier)?;
         require_not_blacklisted(&env, &to)?;
@@ -174,7 +180,6 @@ impl CarbonCreditToken {
         MintEvent { to, amount }.publish(&env);
         Ok(())
     }
-
 
     /// Transfers tokens between addresses.
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), Error> {
@@ -278,7 +283,6 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-
     /// Burns tokens (SEP-41 standard).
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
@@ -298,12 +302,7 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    pub fn burn_from(
-        env: Env,
-        spender: Address,
-        from: Address,
-        amount: i128,
-    ) -> Result<(), Error> {
+    pub fn burn_from(env: Env, spender: Address, from: Address, amount: i128) -> Result<(), Error> {
         spender.require_auth();
         check_nonnegative_amount(amount)?;
         require_not_blacklisted(&env, &spender)?;
