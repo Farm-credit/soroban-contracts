@@ -6,11 +6,9 @@ use soroban_sdk::{
     Address, Bytes, Env, String,
 };
 
-use crate::error::Error;
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
 // Mock RBAC Contract
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
 
 #[soroban_sdk::contract]
 pub struct MockRbacContract;
@@ -22,9 +20,9 @@ impl MockRbacContract {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
 // Test helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
 
 fn setup() -> (
     Env,
@@ -59,14 +57,17 @@ fn setup() -> (
 
 #[test]
 fn test_retire_and_certificate_issuance() {
-    let (_env, token, _, verifier, user) = setup();
+    let (env, token, _, verifier, user) = setup();
 
     // Mint some tokens
-    token.mint(&verifier, &user, &1000);
+    let report_hash_1 = Bytes::new(&env);
+    token.mint(&verifier, &user, &1000, &report_hash_1);
     assert_eq!(token.balance(&user), 1000);
 
     // Retire some tokens
-    token.retire(&user, &300);
+    let report_hash_2 = Bytes::new(&env);
+    let methodology = String::from_str(&env, "Direct Measurement");
+    token.retire(&user, &300, &report_hash_2, &methodology);
 
     assert_eq!(token.balance(&user), 700);
     assert_eq!(token.total_retired(), 300);
@@ -83,7 +84,8 @@ fn test_retire_and_certificate_issuance() {
     assert_eq!(token.get_certificate_count(), 1);
 
     // Retire more
-    token.retire(&user, &200);
+    let report_hash_3 = Bytes::new(&env);
+    token.retire(&user, &200, &report_hash_3, &methodology);
     let certs2 = token.get_certificates(&user);
     assert_eq!(certs2.len(), 2);
     assert_eq!(certs2.get(1).unwrap().amount, 200);

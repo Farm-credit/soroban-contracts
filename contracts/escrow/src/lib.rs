@@ -3,7 +3,7 @@
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 mod storage {
-    use soroban_sdk::{Address, Env};
+    use soroban_sdk::Env;
 
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
