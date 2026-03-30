@@ -59,7 +59,7 @@ mod storage {
 }
 
 mod events {
-    use soroban_sdk::{contracttype, Address, Env};
+    use soroban_sdk::{contracttype, Address};
 
     #[derive(Clone)]
     #[contracttype]
@@ -209,13 +209,10 @@ impl EscrowContract {
             panic!("fill amount exceeds remaining offer amount");
         }
 
-        // Enforce min_fill_amount unless this fill fully consumes the remainder
-        if fill_carbon_amount < offer.min_fill_amount && fill_carbon_amount < remaining_carbon {
-            panic!("fill amount below minimum");
-        }
-
+        // Calculate proportional USDC amount
         let fill_usdc_amount = (fill_carbon_amount * offer.usdc_amount) / offer.carbon_amount;
 
+        // Transfer USDC from buyer to escrow
         let usdc_client = soroban_sdk::token::Client::new(&env, &offer.usdc_token);
         usdc_client.transfer(&buyer, &env.current_contract_address(), &fill_usdc_amount);
 

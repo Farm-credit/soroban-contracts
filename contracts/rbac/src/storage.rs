@@ -5,10 +5,11 @@ pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
 
 // ── Role Types ───────────────────────────────────────────────────────────────
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug, Eq)]
 #[contracttype]
 pub enum RoleType {
     SuperAdmin,
+    Admin,
     Verifier,
     Trader,
 }
@@ -19,6 +20,7 @@ pub enum RoleType {
 pub enum DataKey {
     Initialized,
     SuperAdmin,
+    Admin(Address), // Map of addresses with Admin role
     Role(Address),
 }
 
@@ -38,7 +40,7 @@ pub fn read_super_admin(e: &Env) -> Address {
     e.storage()
         .instance()
         .get(&DataKey::SuperAdmin)
-        .unwrap()
+        .expect("super admin not set")
 }
 
 pub fn write_super_admin(e: &Env, admin: &Address) {
@@ -65,24 +67,27 @@ pub fn remove_role(e: &Env, address: &Address) {
 }
 
 // ── Role Write Helpers ───────────────────────────────────────────────────────
-pub fn grant_super_admin(e: &Env, address: &Address) {
-    write_role(e, address, RoleType::SuperAdmin);
+pub fn read_admin(e: &Env, address: &Address) -> bool {
+    e.storage()
+        .instance()
+        .get::<_, bool>(&DataKey::Admin(address.clone()))
+        .unwrap_or(false)
 }
 
-pub fn revoke_super_admin(e: &Env, address: &Address) {
-    remove_role(e, address);
+pub fn write_admin(e: &Env, address: &Address) {
+    e.storage()
+        .instance()
+        .set(&DataKey::Admin(address.clone()), &true);
 }
 
-pub fn grant_verifier(e: &Env, address: &Address) {
-    write_role(e, address, RoleType::Verifier);
+pub fn revoke_admin(e: &Env, address: &Address) {
+    e.storage()
+        .instance()
+        .remove(&DataKey::Admin(address.clone()));
 }
 
 pub fn revoke_verifier(e: &Env, address: &Address) {
     remove_role(e, address);
-}
-
-pub fn grant_trader(e: &Env, address: &Address) {
-    write_role(e, address, RoleType::Trader);
 }
 
 pub fn revoke_trader(e: &Env, address: &Address) {
@@ -92,6 +97,14 @@ pub fn revoke_trader(e: &Env, address: &Address) {
 // ── Role Checks ───────────────────────────────────────────────────────────────
 pub fn is_super_admin(e: &Env, address: &Address) -> bool {
     matches!(read_role(e, address), Some(RoleType::SuperAdmin))
+}
+
+pub fn is_admin(e: &Env, address: &Address) -> bool {
+    // Both SuperAdmin and Admin satisfy the "is_admin" check in most contexts
+    match read_role(e, address) {
+        Some(RoleType::SuperAdmin) | Some(RoleType::Admin) => true,
+        _ => false,
+    }
 }
 
 pub fn is_verifier(e: &Env, address: &Address) -> bool {
