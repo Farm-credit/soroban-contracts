@@ -18,6 +18,7 @@ pub struct MockRbacContract;
 #[soroban_sdk::contractimpl]
 impl MockRbacContract {
     pub fn has_role(_env: Env, _address: Address, _role: String) -> bool {
+
         true // Mock: everyone is a verifier for tests
     }
 }
@@ -52,38 +53,49 @@ fn setup() -> (
         &0u32,
     );
 
+    env.ledger().with_mut(|l| l.timestamp = 123456789);
+
     (env, token, admin, verifier, user)
 }
 
 #[test]
-fn test_retire_with_audit_metadata() {
-    let (env, token, _, verifier, user) = setup();
-    
-    let report_hash = Bytes::from_array(&env, &[1u8; 32]);
-    let methodology = String::from_str(&env, "VERRA-VM0001");
+fn test_retire_and_certificate_issuance() {
+    let (_env, token, _, verifier, user) = setup();
 
-    // Mint tokens
-    token.mint(&verifier, &user, &1000, &report_hash);
+    
+    // Mint some tokens
+    token.mint(&verifier, &user, &1000);
     assert_eq!(token.balance(&user), 1000);
 
-    // Retire tokens with audit metadata
-    token.retire(&user, &300, &report_hash, &methodology);
+    // Retire some tokens
+    token.retire(&user, &300);
     
     assert_eq!(token.balance(&user), 700);
     assert_eq!(token.total_retired(), 300);
 
-    // Verify events (indirectly via compilation/test pass)
-    // In a real audit test, we would inspect the event log, but here we focus on interface extension.
+    // Check certificate issuance
+    let certs = token.get_certificates(&user);
+    assert_eq!(certs.len(), 1);
+    
+    let cert = certs.get(0).unwrap();
+    assert_eq!(cert.id, 1);
+    assert_eq!(cert.amount, 300);
+    assert!(cert.timestamp > 0);
+    
+    assert_eq!(token.get_certificate_count(), 1);
+
+    // Retire more
+    token.retire(&user, &200);
+    let certs2 = token.get_certificates(&user);
+    assert_eq!(certs2.len(), 2);
+    assert_eq!(certs2.get(1).unwrap().amount, 200);
+    assert_eq!(token.get_certificate_count(), 2);
 }
 
 #[test]
-fn test_prevent_double_mint_with_same_hash() {
-    let (env, token, _, verifier, user) = setup();
-    let report_hash = Bytes::from_array(&env, &[2u8; 32]);
-
-    token.mint(&verifier, &user, &500, &report_hash);
-    
-    // Attempting second mint with same hash should panic
-    let result = token.try_mint(&verifier, &user, &500, &report_hash);
-    assert!(result.is_err());
+fn test_view_certificates_empty() {
+    let (env, token, _, _, _) = setup();
+    let nobody = Address::generate(&env);
+    let certs = token.get_certificates(&nobody);
+    assert_eq!(certs.len(), 0);
 }

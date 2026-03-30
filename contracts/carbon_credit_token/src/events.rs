@@ -95,3 +95,21 @@ impl RetirementEvent {
     }
 }
 
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct CertificateGeneratedEvent {
+    pub certificate_id: u64,
+    pub corporate: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+impl CertificateGeneratedEvent {
+    pub fn publish(self, env: &Env) {
+        env.events().publish(
+            (symbol_short!("cert"), self.corporate, self.certificate_id),
+            (self.amount, self.timestamp),
+        );
+    }
+}
+

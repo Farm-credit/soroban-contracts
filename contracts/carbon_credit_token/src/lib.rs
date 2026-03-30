@@ -20,14 +20,18 @@ use crate::admin::{
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::error::Error;
-use crate::events::{ApproveEvent, BurnEvent, MintEvent, RetirementEvent, TransferEvent};
+use crate::events::{
+    ApproveEvent, BurnEvent, CertificateGeneratedEvent, MintEvent, RetirementEvent, TransferEvent,
+};
+
 use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
 use crate::rbac::require_verifier;
 use crate::storage::{
-    is_initialized, is_report_hash_used, mark_report_hash_used, read_total_retired,
+    increment_certificate_count, is_initialized, is_report_hash_used, mark_report_hash_used, read_total_retired,
     read_total_supply, set_initialized, write_rbac_contract, write_total_retired,
-    write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
+    write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
 };
+
 
 fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     if amount < 0 {
@@ -171,6 +175,8 @@ impl CarbonCreditToken {
         Ok(())
     }
 
+
+    /// Transfers tokens between addresses.
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
@@ -242,6 +248,14 @@ impl CarbonCreditToken {
 
         let timestamp = env.ledger().timestamp();
 
+        let cert_id = increment_certificate_count(&env);
+        let certificate = OffsetCertificate {
+            id: cert_id,
+            amount,
+            timestamp,
+        };
+        write_certificate(&env, from.clone(), certificate);
+
         RetirementEvent {
             from: from.clone(),
             amount,
@@ -251,11 +265,21 @@ impl CarbonCreditToken {
         }
         .publish(&env);
 
+        CertificateGeneratedEvent {
+            certificate_id: cert_id,
+            corporate: from.clone(),
+            amount,
+            timestamp,
+        }
+        .publish(&env);
+
         BurnEvent { from, amount }.publish(&env);
 
         Ok(())
     }
 
+
+    /// Burns tokens (SEP-41 standard).
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
@@ -380,5 +404,15 @@ impl CarbonCreditToken {
 
     pub fn admin(env: Env) -> Address {
         read_administrator(&env)
+    }
+
+    /// Returns the list of certificates for a corporate address.
+    pub fn get_certificates(env: Env, corporate: Address) -> soroban_sdk::Vec<OffsetCertificate> {
+        read_certificates(&env, corporate)
+    }
+
+    /// Returns the total number of certificates issued globally.
+    pub fn get_certificate_count(env: Env) -> u64 {
+        read_certificate_count(&env)
     }
 }

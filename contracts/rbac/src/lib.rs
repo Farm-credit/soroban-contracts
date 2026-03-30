@@ -3,7 +3,7 @@
 mod error;
 mod storage;
 
-use error::Error;
+pub use error::Error;
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
 use storage::{
@@ -85,6 +85,14 @@ impl RbacContract {
             }
             Some(storage::RoleType::Trader) => {
                 storage::revoke_trader(&env, &account);
+                Ok(())
+            }   
+            Some(storage::RoleType::Verifier) => {
+                revoke_verifier(&env, &account);
+                Ok(())
+            }
+            Some(storage::RoleType::Trader) => {
+                revoke_trader(&env, &account);
                 Ok(())
             }
             Some(storage::RoleType::SuperAdmin) => Err(Error::CannotRemoveSuperAdmin),
