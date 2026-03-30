@@ -22,6 +22,7 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::error::Error;
 use crate::events::{
     ApproveEvent, BurnEvent, CertificateGeneratedEvent, MintEvent, RetirementEvent, TransferEvent,
+    PauseEvent, UnpauseEvent,
 };
 
 use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
@@ -30,6 +31,7 @@ use crate::storage::{
     increment_certificate_count, is_initialized, is_report_hash_used, mark_report_hash_used, read_total_retired,
     read_total_supply, set_initialized, write_rbac_contract, write_total_retired,
     write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
+    is_paused, set_paused,
 };
 
 
@@ -44,6 +46,14 @@ fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
 fn require_not_blacklisted(env: &Env, addr: &Address) -> Result<(), Error> {
     if is_blacklisted(env, addr) {
         Err(Error::Blacklisted)
+    } else {
+        Ok(())
+    }
+}
+
+fn require_not_paused(env: &Env) -> Result<(), Error> {
+    if is_paused(env) {
+        Err(Error::ContractPaused)
     } else {
         Ok(())
     }
@@ -83,6 +93,7 @@ impl CarbonCreditToken {
     pub fn add_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
@@ -95,6 +106,7 @@ impl CarbonCreditToken {
     pub fn remove_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
@@ -148,10 +160,48 @@ impl CarbonCreditToken {
         Ok(())
     }
 
+    // ── Pause / emergency stop (SuperAdmin only) ──────────────────────────────
+
+    /// Pauses all state-mutating operations. SuperAdmin only.
+    pub fn admin_pause(env: Env, admin: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+        if admin != super_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        set_paused(&env, true);
+        PauseEvent { admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Unpauses the contract. SuperAdmin only.
+    pub fn admin_unpause(env: Env, admin: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+        if admin != super_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        set_paused(&env, false);
+        UnpauseEvent { admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Returns whether the contract is currently paused.
+    pub fn paused(env: Env) -> bool {
+        is_paused(&env)
+    }
+
     // ── Token operations ──────────────────────────────────────────────────────
 
     pub fn mint(env: Env, verifier: Address, to: Address, amount: i128, report_hash: Bytes) -> Result<(), Error> {
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &verifier)?;
         require_not_blacklisted(&env, &to)?;
 
@@ -180,6 +230,7 @@ impl CarbonCreditToken {
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
         require_not_blacklisted(&env, &to)?;
 
@@ -203,6 +254,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         spender.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &spender)?;
         require_not_blacklisted(&env, &from)?;
         require_not_blacklisted(&env, &to)?;
@@ -228,6 +280,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         if amount == 0 {
@@ -283,6 +336,7 @@ impl CarbonCreditToken {
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         env.storage()
@@ -306,6 +360,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         spender.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &spender)?;
         require_not_blacklisted(&env, &from)?;
 
@@ -332,6 +387,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         env.storage()
