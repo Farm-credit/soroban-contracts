@@ -58,36 +58,6 @@ mod storage {
     }
 }
 
-mod events {
-    use soroban_sdk::{contracttype, Address};
-
-    #[derive(Clone)]
-    #[contracttype]
-    pub struct OfferCreatedEvent {
-        pub offer_id: u64,
-        pub seller: Address,
-        pub carbon_amount: i128,
-        pub usdc_amount: i128,
-    }
-
-    #[derive(Clone)]
-    #[contracttype]
-    pub struct OfferFilledEvent {
-        pub offer_id: u64,
-        pub buyer: Address,
-        pub filled_carbon: i128,
-        pub filled_usdc: i128,
-    }
-
-    #[derive(Clone)]
-    #[contracttype]
-    pub struct OfferCancelledEvent {
-        pub offer_id: u64,
-        pub seller: Address,
-        pub remaining_carbon: i128,
-    }
-}
-
 #[derive(Clone)]
 #[contracttype]
 pub struct Offer {
@@ -100,6 +70,8 @@ pub struct Offer {
     pub carbon_token: Address,
     pub usdc_token: Address,
     pub is_cancelled: bool,
+    /// The ledger number after which this offer is considered expired.
+    pub expiration_ledger: u32,
 }
 
 impl Offer {
@@ -113,6 +85,10 @@ impl Offer {
 
     pub fn is_fully_filled(&self) -> bool {
         self.filled_carbon >= self.carbon_amount
+    }
+
+    pub fn is_expired(&self, current_ledger: u32) -> bool {
+        current_ledger > self.expiration_ledger
     }
 }
 
@@ -131,8 +107,9 @@ impl EscrowContract {
         storage::write_offer_count(&env, 0);
     }
 
-    /// Create a new offer - seller deposits Carbon tokens into escrow
-    /// Returns the offer_id
+    /// Create a new offer - seller deposits Carbon tokens into escrow.
+    /// `expiration_ledger` sets the ledger number after which the offer expires.
+    /// Returns the offer_id.
     pub fn create_offer(
         env: Env,
         seller: Address,
@@ -140,11 +117,16 @@ impl EscrowContract {
         usdc_amount: i128,
         carbon_token: Address,
         usdc_token: Address,
+        expiration_ledger: u32,
     ) -> u64 {
         seller.require_auth();
 
         if carbon_amount <= 0 || usdc_amount <= 0 {
             panic!("amounts must be positive");
+        }
+
+        if expiration_ledger <= env.ledger().sequence() {
+            panic!("expiration_ledger must be in the future");
         }
 
         storage::extend_ttl(&env);
@@ -162,11 +144,12 @@ impl EscrowContract {
             carbon_token: carbon_token.clone(),
             usdc_token: usdc_token.clone(),
             is_cancelled: false,
+            expiration_ledger,
         };
 
         storage::store_offer(&env, offer_id, &offer);
 
-        // Transfer Carbon tokens from seller to escrow using token interface
+        // Transfer Carbon tokens from seller to escrow
         let carbon_client = soroban_sdk::token::Client::new(&env, &carbon_token);
         carbon_client.transfer(&seller, &env.current_contract_address(), &carbon_amount);
 
@@ -178,8 +161,8 @@ impl EscrowContract {
         offer_id
     }
 
-    /// Fill an offer - buyer pays USDC and receives Carbon tokens
-    /// Supports partial fills - amount specifies how much carbon to buy
+    /// Fill an offer - buyer pays USDC and receives Carbon tokens.
+    /// Supports partial fills. Rejects fills on expired offers.
     pub fn fill_offer(env: Env, offer_id: u64, buyer: Address, fill_carbon_amount: i128) {
         buyer.require_auth();
 
@@ -193,6 +176,10 @@ impl EscrowContract {
 
         if offer.is_cancelled {
             panic!("offer is cancelled");
+        }
+
+        if offer.is_expired(env.ledger().sequence()) {
+            panic!("offer is expired");
         }
 
         let remaining_carbon = offer.remaining_carbon();
@@ -230,8 +217,8 @@ impl EscrowContract {
         );
     }
 
-    /// Cancel an offer - only the seller can cancel
-    /// Returns remaining carbon tokens to seller
+    /// Cancel an offer - only the seller can cancel.
+    /// Returns remaining carbon tokens to seller.
     pub fn cancel_offer(env: Env, offer_id: u64, caller: Address) {
         caller.require_auth();
 
@@ -259,6 +246,67 @@ impl EscrowContract {
         env.events().publish(
             ("offer_cancelled",),
             (offer_id, offer.seller.clone(), remaining_carbon),
+        );
+    }
+
+    /// Reclaim tokens from an expired offer.
+    /// Anyone can call this, but tokens always return to the seller.
+    /// Cleans up ledger storage for the expired offer.
+    pub fn reclaim_expired(env: Env, offer_id: u64) {
+        storage::extend_ttl(&env);
+
+        let offer = storage::get_offer(&env, offer_id).expect("offer not found");
+
+        if offer.is_cancelled {
+            panic!("offer is already cancelled");
+        }
+
+        if !offer.is_expired(env.ledger().sequence()) {
+            panic!("offer has not expired yet");
+        }
+
+        let remaining_carbon = offer.remaining_carbon();
+        if remaining_carbon > 0 {
+            let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
+            carbon_client.transfer(&env.current_contract_address(), &offer.seller, &remaining_carbon);
+        }
+
+        // Remove the offer to reclaim ledger storage
+        storage::remove_offer(&env, offer_id);
+
+        env.events().publish(
+            ("offer_reclaimed",),
+            (offer_id, offer.seller.clone(), remaining_carbon),
+        );
+    }
+
+    /// Extend the expiration of an offer. Only the seller can extend.
+    /// `new_expiration_ledger` must be greater than the current expiration.
+    pub fn extend_offer_expiration(env: Env, offer_id: u64, seller: Address, new_expiration_ledger: u32) {
+        seller.require_auth();
+
+        storage::extend_ttl(&env);
+
+        let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
+
+        if seller != offer.seller {
+            panic!("only the seller can extend this offer");
+        }
+
+        if offer.is_cancelled {
+            panic!("offer is cancelled");
+        }
+
+        if new_expiration_ledger <= offer.expiration_ledger {
+            panic!("new expiration must be later than current expiration");
+        }
+
+        offer.expiration_ledger = new_expiration_ledger;
+        storage::store_offer(&env, offer_id, &offer);
+
+        env.events().publish(
+            ("offer_expiration_extended",),
+            (offer_id, seller.clone(), new_expiration_ledger),
         );
     }
 
