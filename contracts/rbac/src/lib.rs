@@ -6,11 +6,7 @@ mod storage;
 pub use error::Error;
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
-use storage::{
-    is_admin, is_super_admin, is_trader, is_verifier, read_admin, read_role, read_super_admin,
-    revoke_admin, revoke_trader, revoke_verifier, write_admin, write_role, write_super_admin,
-    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
-};
+use storage::{is_admin, read_role, read_super_admin, write_admin, write_role, write_super_admin};
 
 #[contract]
 pub struct RbacContract;
@@ -86,14 +82,6 @@ impl RbacContract {
             Some(storage::RoleType::Trader) => {
                 storage::revoke_trader(&env, &account);
                 Ok(())
-            }   
-            Some(storage::RoleType::Verifier) => {
-                revoke_verifier(&env, &account);
-                Ok(())
-            }
-            Some(storage::RoleType::Trader) => {
-                revoke_trader(&env, &account);
-                Ok(())
             }
             Some(storage::RoleType::SuperAdmin) => Err(Error::CannotRemoveSuperAdmin),
             None => Err(Error::RoleNotAssigned),
@@ -133,7 +121,6 @@ impl RbacContract {
         write_super_admin(&env, &new_admin);
         write_admin(&env, &new_admin);
         write_role(&env, &new_admin, storage::RoleType::SuperAdmin);
-
 
         Ok(())
     }

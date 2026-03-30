@@ -8,7 +8,6 @@ pub struct OffsetCertificate {
     pub timestamp: u64,
 }
 
-
 // ── TTL Constants ──────────────────────────────────────────────────────────────
 pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
@@ -55,7 +54,6 @@ pub enum DataKey {
 
     // Init flag
     Initialized,
-    VerifierRegistry,
     UsedReportHash(Bytes),
 
     // Offset Certificates
@@ -63,24 +61,19 @@ pub enum DataKey {
     Certificates(Address),
 }
 
-
 // ── Initialization ─────────────────────────────────────────────────────────────
 pub fn is_initialized(e: &Env) -> bool {
     e.storage().instance().has(&DataKey::Initialized)
 }
 
 pub fn set_initialized(e: &Env) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    e.storage().instance().set(&DataKey::Initialized, &true);
 }
 
 // ── RBAC Contract ──────────────────────────────────────────────────────────────
 /// Persists the external RBAC contract address used for role-based minting checks.
 pub fn write_rbac_contract(e: &Env, rbac_id: &Address) {
-    e.storage()
-        .instance()
-        .set(&DataKey::RbacContract, rbac_id);
+    e.storage().instance().set(&DataKey::RbacContract, rbac_id);
 }
 
 /// Reads the registered RBAC contract address.
@@ -93,68 +86,6 @@ pub fn read_rbac_contract(e: &Env) -> Address {
         .expect("rbac contract address not set: was initialize() called?")
 }
 
-// ── Administrator ──────────────────────────────────────────────────────────────
-pub fn read_administrator(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get(&DataKey::Admin)
-        .expect("administrator not set")
-}
-
-pub fn write_administrator(e: &Env, admin: &Address) {
-    e.storage().instance().set(&DataKey::Admin, admin);
-}
-
-pub fn read_super_admin(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get(&DataKey::SuperAdmin)
-        .expect("super admin not set")
-}
-
-pub fn write_super_admin(e: &Env, admin: &Address) {
-    e.storage().instance().set(&DataKey::SuperAdmin, admin);
-}
-
-// ── Verifier / Blacklist (inline RBAC) ────────────────────────────────────────
-pub fn grant_verifier(e: &Env, verifier: &Address) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Verifier(verifier.clone()), &true);
-}
-
-pub fn revoke_verifier(e: &Env, verifier: &Address) {
-    e.storage()
-        .instance()
-        .remove(&DataKey::Verifier(verifier.clone()));
-}
-
-pub fn is_verifier(e: &Env, addr: &Address) -> bool {
-    e.storage()
-        .instance()
-        .get::<DataKey, bool>(&DataKey::Verifier(addr.clone()))
-        .unwrap_or(false)
-}
-
-pub fn blacklist_address(e: &Env, addr: &Address) {
-    e.storage()
-        .instance()
-        .set(&DataKey::Blacklisted(addr.clone()), &true);
-}
-
-pub fn unblacklist_address(e: &Env, addr: &Address) {
-    e.storage()
-        .instance()
-        .remove(&DataKey::Blacklisted(addr.clone()));
-}
-
-pub fn is_blacklisted(e: &Env, addr: &Address) -> bool {
-    e.storage()
-        .instance()
-        .get::<DataKey, bool>(&DataKey::Blacklisted(addr.clone()))
-        .unwrap_or(false)
-}
-
 // ── Supply Accounting ──────────────────────────────────────────────────────────
 pub fn read_total_supply(e: &Env) -> i128 {
     e.storage()
@@ -164,9 +95,7 @@ pub fn read_total_supply(e: &Env) -> i128 {
 }
 
 pub fn write_total_supply(e: &Env, amount: i128) {
-    e.storage()
-        .instance()
-        .set(&DataKey::TotalSupply, &amount);
+    e.storage().instance().set(&DataKey::TotalSupply, &amount);
 }
 
 pub fn read_total_retired(e: &Env) -> i128 {
@@ -177,22 +106,7 @@ pub fn read_total_retired(e: &Env) -> i128 {
 }
 
 pub fn write_total_retired(e: &Env, amount: i128) {
-    e.storage()
-        .instance()
-        .set(&DataKey::TotalRetired, &amount);
-}
-
-pub fn read_verifier_registry(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get(&DataKey::VerifierRegistry)
-        .expect("verifier registry address not set")
-}
-
-pub fn write_verifier_registry(e: &Env, registry: &Address) {
-    e.storage()
-        .instance()
-        .set(&DataKey::VerifierRegistry, registry);
+    e.storage().instance().set(&DataKey::TotalRetired, &amount);
 }
 
 pub fn is_report_hash_used(e: &Env, hash: &Bytes) -> bool {
@@ -236,10 +150,8 @@ pub fn write_certificate(e: &Env, corporate: Address, cert: OffsetCertificate) {
         .persistent()
         .set(&DataKey::Certificates(corporate.clone()), &certs);
 
-
     // Bump TTL for persistent storage
     e.storage()
         .persistent()
         .extend_ttl(&DataKey::Certificates(corporate.clone()), 17280, 518400);
 }
-

@@ -18,6 +18,4 @@ pub enum Error {
     InvalidHash = 6,
     /// No report found for the given farmer.
     ReportNotFound = 7,
-    /// The verifier is already active.
-    VerifierAlreadyActive = 8,
 }
