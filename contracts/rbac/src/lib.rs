@@ -11,6 +11,7 @@ use storage::{
     write_admin, write_role, write_super_admin, RoleType,
     INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
 };
+use storage::{is_admin, read_role, read_super_admin, write_admin, write_role, write_super_admin};
 
 #[contract]
 pub struct RbacContract;
@@ -220,3 +221,6 @@ impl RbacContract {
 
 #[cfg(test)]
 mod test;
+        Ok(())
+    }
+}
