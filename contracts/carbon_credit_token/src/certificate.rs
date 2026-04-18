@@ -35,26 +35,3 @@ pub fn read_certificate(e: &Env, id: u32) -> Option<CertificateRecord> {
     let key = DataKey::Certificate(id);
     e.storage().persistent().get(&key)
 }
-
-pub fn read_project_name(e: &Env) -> String {
-    e.storage().instance().get(&DataKey::ProjectName).unwrap()
-}
-
-pub fn read_project_vintage(e: &Env) -> String {
-    e.storage().instance().get(&DataKey::Vintage).unwrap()
-}
-
-pub fn read_project_location(e: &Env) -> String {
-    e.storage().instance().get(&DataKey::Location).unwrap()
-}
-
-pub fn read_project_metadata_url(e: &Env) -> String {
-    e.storage().instance().get(&DataKey::MetadataUrl).unwrap()
-}
-
-pub fn write_project_info(e: &Env, name: String, vintage: String, location: String, url: String) {
-    e.storage().instance().set(&DataKey::ProjectName, &name);
-    e.storage().instance().set(&DataKey::Vintage, &vintage);
-    e.storage().instance().set(&DataKey::Location, &location);
-    e.storage().instance().set(&DataKey::MetadataUrl, &url);
-}
