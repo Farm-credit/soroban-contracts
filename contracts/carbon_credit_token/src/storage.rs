@@ -54,11 +54,14 @@ pub enum DataKey {
 
     // Init flag
     Initialized,
-    UsedReportHash(Bytes),
-
-    // Offset Certificates
-    CertificateCount,
-    Certificates(Address),
+    // Project Metadata
+    ProjectName,
+    Vintage,
+    Location,
+    MetadataUrl,
+    // NFT Data
+    NextCertificateID,
+    Certificate(u32),
 }
 
 // ── Initialization ─────────────────────────────────────────────────────────────

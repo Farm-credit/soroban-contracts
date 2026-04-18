@@ -3,7 +3,7 @@
 mod admin;
 mod allowance;
 mod balance;
-mod error;
+mod certificate;
 mod events;
 mod metadata;
 mod rbac;
@@ -19,9 +19,18 @@ use crate::admin::{
 };
 use crate::allowance::{read_allowance, spend_allowance, write_allowance};
 use crate::balance::{read_balance, receive_balance, spend_balance};
-use crate::error::Error;
+use crate::certificate::{
+    increment_next_certificate_id, read_certificate, read_next_certificate_id,
+    read_project_location, read_project_metadata_url, read_project_name, read_project_vintage,
+    write_certificate, write_project_info, CertificateRecord,
+};
 use crate::events::{
-    ApproveEvent, BurnEvent, CertificateGeneratedEvent, MintEvent, RetirementEvent, TransferEvent,
+    ApproveEvent, BurnEvent, CertificateMintedEvent, MintEvent, RetirementEvent, TransferEvent,
+};
+use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
+use crate::storage::{
+    is_initialized, read_total_retired, read_total_supply, set_initialized, write_total_retired,
+    write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
 };
 
 use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
@@ -59,11 +68,14 @@ impl CarbonCreditToken {
     pub fn initialize(
         env: Env,
         admin: Address,
-        rbac_contract: Address,
         name: String,
         symbol: String,
         decimals: u32,
-    ) -> Result<(), Error> {
+        project_name: String,
+        vintage: String,
+        location: String,
+        metadata_url: String,
+    ) {
         if is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }
@@ -75,7 +87,7 @@ impl CarbonCreditToken {
         write_metadata(&env, name, symbol, decimals);
         write_total_supply(&env, 0);
         write_total_retired(&env, 0);
-        Ok(())
+        write_project_info(&env, project_name, vintage, location, metadata_url);
     }
 
     // ── RBAC management (SuperAdmin only) ────────────────────────────────────
@@ -278,6 +290,27 @@ impl CarbonCreditToken {
         }
         .publish(&env);
 
+        // Mint Certificate (NFT)
+        let cert_id = increment_next_certificate_id(&env);
+        let cert = CertificateRecord {
+            id: cert_id,
+            owner: from.clone(),
+            amount,
+            timestamp,
+            project_name: read_project_name(&env),
+            vintage: read_project_vintage(&env),
+            location: read_project_location(&env),
+            metadata_url: read_project_metadata_url(&env),
+        };
+        write_certificate(&env, cert);
+
+        CertificateMintedEvent {
+            id: cert_id,
+            owner: from.clone(),
+            amount,
+        }
+        .publish(&env);
+
         BurnEvent { from, amount }.publish(&env);
 
         Ok(())
@@ -401,17 +434,13 @@ impl CarbonCreditToken {
         read_decimals(&env)
     }
 
-    pub fn admin(env: Env) -> Address {
-        read_administrator(&env)
+    /// Returns a specific retirement certificate by ID.
+    pub fn get_certificate(env: Env, id: u32) -> Option<CertificateRecord> {
+        read_certificate(&env, id)
     }
 
-    /// Returns the list of certificates for a corporate address.
-    pub fn get_certificates(env: Env, corporate: Address) -> soroban_sdk::Vec<OffsetCertificate> {
-        read_certificates(&env, corporate)
-    }
-
-    /// Returns the total number of certificates issued globally.
-    pub fn get_certificate_count(env: Env) -> u64 {
-        read_certificate_count(&env)
+    /// Returns the total number of certificates issued.
+    pub fn certificate_count(env: Env) -> u32 {
+        read_next_certificate_id(&env)
     }
 }

@@ -6,31 +6,45 @@ use soroban_sdk::{
     Address, Bytes, Env, String,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock RBAC Contract
-// ─────────────────────────────────────────────────────────────────────────────
+fn create_token<'a>(e: &Env, admin: &Address) -> CarbonCreditTokenClient<'a> {
+    let contract_id = e.register_contract(None, CarbonCreditToken);
+    let client = CarbonCreditTokenClient::new(e, &contract_id);
 
-#[soroban_sdk::contract]
-pub struct MockRbacContract;
+    client.initialize(
+        admin,
+        &String::from_str(e, "Carbon Credit Token"),
+        &String::from_str(e, "CCT"),
+        &0u32,
+        &String::from_str(e, "Amazon Reforestation"),
+        &String::from_str(e, "2023"),
+        &String::from_str(e, "Brazil"),
+        &String::from_str(e, "https://farmcredit.xyz/amazon-1"),
+    );
 
-#[soroban_sdk::contractimpl]
-impl MockRbacContract {
-    pub fn has_role(_env: Env, _address: Address, _role: String) -> bool {
-        true // Mock: everyone is a verifier for tests
-    }
+    client
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Test helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ============ INITIALIZATION TESTS ============
 
-fn setup() -> (
-    Env,
-    CarbonCreditTokenClient<'static>,
-    Address, // admin
-    Address, // verifier
-    Address, // user
-) {
+#[test]
+fn test_initialize() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let token = create_token(&env, &admin);
+
+    assert_eq!(token.name(), String::from_str(&env, "Carbon Credit Token"));
+    assert_eq!(token.symbol(), String::from_str(&env, "CCT"));
+    assert_eq!(token.decimals(), 0u32);
+    assert_eq!(token.total_supply(), 0i128);
+    assert_eq!(token.total_retired(), 0i128);
+}
+
+// ============ MINT TESTS ============
+
+#[test]
+fn test_mint() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -74,9 +88,21 @@ fn test_retire_and_certificate_issuance() {
     assert_eq!(token.balance(&user), 700);
     assert_eq!(token.total_retired(), 300);
 
-    // Check certificate issuance
-    let certs = token.get_certificates(&user);
-    assert_eq!(certs.len(), 1);
+    // Verify NFT creation
+    assert_eq!(token.certificate_count(), 1);
+    let cert = token.get_certificate(&1).unwrap();
+    assert_eq!(cert.owner, user1);
+    assert_eq!(cert.amount, 300);
+    assert_eq!(cert.project_name, String::from_str(&env, "Amazon Reforestation"));
+    assert_eq!(cert.vintage, String::from_str(&env, "2023"));
+    assert_eq!(cert.location, String::from_str(&env, "Brazil"));
+    assert_eq!(cert.metadata_url, String::from_str(&env, "https://farmcredit.xyz/amazon-1"));
+}
+
+#[test]
+fn test_retire_multiple_times() {
+    let env = Env::default();
+    env.mock_all_auths();
 
     let cert = certs.get(0).unwrap();
     assert_eq!(cert.id, 1);
