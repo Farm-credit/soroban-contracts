@@ -13,7 +13,7 @@ mod storage;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String, Vec};
 
 use crate::admin::{
     blacklist_address, grant_verifier, is_blacklisted, is_verifier, read_administrator,
@@ -140,6 +140,43 @@ impl CarbonCreditToken {
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
         unblacklist_address(&env, &target);
+        Ok(())
+    }
+
+    pub fn add_to_blacklist_batch(env: Env, admin: Address, accounts: Vec<Address>) -> Result<(), Error> {
+        admin.require_auth();
+        if admin != read_super_admin(&env) {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        for account in accounts.iter() {
+            if account == admin {
+                return Err(Error::CannotBlacklistSelf);
+            }
+            blacklist_address(&env, &account);
+        }
+
+        Ok(())
+    }
+
+    pub fn remove_from_blacklist_batch(env: Env, admin: Address, accounts: Vec<Address>) -> Result<(), Error> {
+        admin.require_auth();
+        if admin != read_super_admin(&env) {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        for account in accounts.iter() {
+            unblacklist_address(&env, &account);
+        }
+
         Ok(())
     }
 
