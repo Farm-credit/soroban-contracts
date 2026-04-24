@@ -1,8 +1,8 @@
 use soroban_sdk::{contracttype, Address, Env, String};
 
-// TTL Constants
-pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
-pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
+// TTL Constants (standardized across all contracts)
+pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day at 5s/ledger
+pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days at 5s/ledger
 
 /// Verifier profile containing public decentralized profile information
 #[derive(Clone)]

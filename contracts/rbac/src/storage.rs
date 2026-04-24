@@ -1,5 +1,9 @@
 use soroban_sdk::{contracttype, Address, Env};
 
+// ── TTL Constants (standardized across all contracts) ────────────────────────
+pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day at 5s/ledger
+pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days at 5s/ledger
+
 // ── Role Types ───────────────────────────────────────────────────────────────
 #[derive(Clone, Copy, PartialEq, Debug, Eq)]
 #[contracttype]

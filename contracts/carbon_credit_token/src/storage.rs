@@ -1,11 +1,11 @@
 use soroban_sdk::{contracttype, Address, Bytes, Env};
 
-// ── TTL Constants ──────────────────────────────────────────────────────────────
-pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
-pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
+// ── TTL Constants (standardized across all contracts) ─────────────────────────
+pub const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day at 5s/ledger
+pub const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days at 5s/ledger
 
-pub const BALANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
-pub const BALANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
+pub const BALANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day at 5s/ledger
+pub const BALANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days at 5s/ledger
 
 // ── Allowance Types ────────────────────────────────────────────────────────────
 #[derive(Clone)]
@@ -57,6 +57,10 @@ pub enum DataKey {
     // NFT Data
     NextCertificateID,
     Certificate(u32),
+
+    // Retirement Records
+    NextRetirementID,
+    Retirement(u64),
 }
 
 // ── Initialization ─────────────────────────────────────────────────────────────
