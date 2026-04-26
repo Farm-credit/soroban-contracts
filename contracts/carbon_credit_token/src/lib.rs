@@ -8,6 +8,7 @@ mod error;
 mod events;
 mod metadata;
 mod rbac;
+mod retirement;
 mod storage;
 
 #[cfg(test)]
@@ -24,6 +25,9 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::certificate::{
     increment_next_certificate_id, read_certificate, read_next_certificate_id, write_certificate,
     CertificateRecord,
+};
+use crate::retirement::{
+    increment_next_retirement_id, read_retirement, write_retirement, RetirementRecord,
 };
 use crate::error::Error;
 use crate::events::{
@@ -196,6 +200,18 @@ impl CarbonCreditToken {
         Ok(())
     }
 
+    /// Proactively extends TTL for all critical instance storage. Admin only.
+    pub fn extend_ttl(env: Env) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        Ok(())
+    }
+
     // ── Token operations ──────────────────────────────────────────────────────
 
     pub fn mint(
@@ -278,6 +294,8 @@ impl CarbonCreditToken {
         amount: i128,
         _report_hash: Bytes,
         _methodology: String,
+        reason: String,
+        beneficiary: String,
     ) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
@@ -300,6 +318,20 @@ impl CarbonCreditToken {
         write_total_retired(&env, new_retired);
 
         let timestamp = env.ledger().timestamp();
+
+        // Store on-chain retirement record
+        let retirement_id = increment_next_retirement_id(&env);
+        write_retirement(
+            &env,
+            RetirementRecord {
+                id: retirement_id,
+                retiree: from.clone(),
+                amount,
+                timestamp,
+                reason,
+                beneficiary,
+            },
+        );
 
         // Mint Soulbound NFT Certificate
         let cert_id = increment_next_certificate_id(&env);
@@ -382,6 +414,7 @@ impl CarbonCreditToken {
         from.require_auth();
         check_nonnegative_amount(amount)?;
         require_not_blacklisted(&env, &from)?;
+        require_not_blacklisted(&env, &spender)?;
 
         env.storage()
             .instance()
@@ -437,6 +470,10 @@ impl CarbonCreditToken {
 
     pub fn get_certificate(env: Env, id: u32) -> Option<CertificateRecord> {
         read_certificate(&env, id)
+    }
+
+    pub fn get_retirement(env: Env, id: u64) -> Option<RetirementRecord> {
+        read_retirement(&env, id)
     }
 
     pub fn certificate_count(env: Env) -> u32 {
