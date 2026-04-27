@@ -1,11 +1,21 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env,
-};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    InvalidAmount = 2,
+    OfferNotFound = 3,
+    OfferCancelled = 4,
+    FillExceedsRemaining = 5,
+    Unauthorized = 6,
+}
 
 mod storage {
-    use soroban_sdk::{Env, Address};
+    use soroban_sdk::Env;
 
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
@@ -123,13 +133,14 @@ pub struct EscrowContract;
 #[contractimpl]
 impl EscrowContract {
     /// Initialize the escrow contract
-    pub fn initialize(env: Env) {
+    pub fn initialize(env: Env) -> Result<(), Error> {
         storage::extend_ttl(&env);
         if storage::is_initialized(&env) {
-            panic!("escrow already initialized");
+            return Err(Error::AlreadyInitialized);
         }
         storage::set_initialized(&env);
         storage::write_offer_count(&env, 0);
+        Ok(())
     }
 
     /// Create a new offer - seller deposits Carbon tokens into escrow
@@ -141,12 +152,11 @@ impl EscrowContract {
         usdc_amount: i128,
         carbon_token: Address,
         usdc_token: Address,
-        min_fill_amount: i128,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         seller.require_auth();
 
         if carbon_amount <= 0 || usdc_amount <= 0 {
-            panic!("amounts must be positive");
+            return Err(Error::InvalidAmount);
         }
         if min_fill_amount <= 0 {
             panic!("min_fill_amount must be positive");
@@ -183,34 +193,39 @@ impl EscrowContract {
             (offer_id, seller.clone(), carbon_amount, usdc_amount),
         );
 
-        offer_id
+        Ok(offer_id)
     }
 
     /// Fill an offer - buyer pays USDC and receives Carbon tokens
-    /// Supports partial fills - amount specifies how much carbon to buy.
-    /// Fill must be >= min_fill_amount unless it fully consumes the remaining amount.
-    pub fn fill_offer(env: Env, offer_id: u64, buyer: Address, fill_carbon_amount: i128) {
+    /// Supports partial fills - amount specifies how much carbon to buy
+    pub fn fill_offer(
+        env: Env,
+        offer_id: u64,
+        buyer: Address,
+        fill_carbon_amount: i128,
+    ) -> Result<(), Error> {
         buyer.require_auth();
 
         if fill_carbon_amount <= 0 {
-            panic!("fill amount must be positive");
+            return Err(Error::InvalidAmount);
         }
 
         storage::extend_ttl(&env);
 
-        let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
+        let mut offer = storage::get_offer(&env, offer_id).ok_or(Error::OfferNotFound)?;
 
         if offer.is_cancelled {
-            panic!("offer is cancelled");
+            return Err(Error::OfferCancelled);
         }
 
         let remaining_carbon = offer.remaining_carbon();
         if fill_carbon_amount > remaining_carbon {
-            panic!("fill amount exceeds remaining offer amount");
+            return Err(Error::FillExceedsRemaining);
         }
 
-        // Calculate proportional USDC amount
-        let fill_usdc_amount = (fill_carbon_amount * offer.usdc_amount) / offer.carbon_amount;
+        // Calculate proportional USDC amount, rounding up in favor of the seller
+        let fill_usdc_amount = (fill_carbon_amount * offer.usdc_amount + offer.carbon_amount - 1)
+            / offer.carbon_amount;
 
         // Transfer USDC from buyer to escrow
         let usdc_client = soroban_sdk::token::Client::new(&env, &offer.usdc_token);
@@ -219,7 +234,12 @@ impl EscrowContract {
         let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
         carbon_client.transfer(&env.current_contract_address(), &buyer, &fill_carbon_amount);
 
-        usdc_client.transfer(&env.current_contract_address(), &offer.seller, &fill_usdc_amount);
+        // Transfer USDC from escrow to seller
+        usdc_client.transfer(
+            &env.current_contract_address(),
+            &offer.seller,
+            &fill_usdc_amount,
+        );
 
         offer.filled_carbon += fill_carbon_amount;
         offer.filled_usdc += fill_usdc_amount;
@@ -232,31 +252,42 @@ impl EscrowContract {
 
         env.events().publish(
             ("offer_filled",),
-            (offer_id, buyer.clone(), fill_carbon_amount, fill_usdc_amount),
+            (
+                offer_id,
+                buyer.clone(),
+                fill_carbon_amount,
+                fill_usdc_amount,
+            ),
         );
+
+        Ok(())
     }
 
     /// Cancel an offer - only the seller can cancel
     /// Returns remaining carbon tokens to seller
-    pub fn cancel_offer(env: Env, offer_id: u64, caller: Address) {
+    pub fn cancel_offer(env: Env, offer_id: u64, caller: Address) -> Result<(), Error> {
         caller.require_auth();
 
         storage::extend_ttl(&env);
 
-        let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
+        let mut offer = storage::get_offer(&env, offer_id).ok_or(Error::OfferNotFound)?;
 
         if caller != offer.seller {
-            panic!("only the seller can cancel this offer");
+            return Err(Error::Unauthorized);
         }
 
         if offer.is_cancelled {
-            panic!("offer already cancelled");
+            return Err(Error::OfferCancelled);
         }
 
         let remaining_carbon = offer.remaining_carbon();
         if remaining_carbon > 0 {
             let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
-            carbon_client.transfer(&env.current_contract_address(), &offer.seller, &remaining_carbon);
+            carbon_client.transfer(
+                &env.current_contract_address(),
+                &offer.seller,
+                &remaining_carbon,
+            );
         }
 
         offer.is_cancelled = true;
@@ -266,6 +297,8 @@ impl EscrowContract {
             ("offer_cancelled",),
             (offer_id, offer.seller.clone(), remaining_carbon),
         );
+
+        Ok(())
     }
 
     /// Get offer details
