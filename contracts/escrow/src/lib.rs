@@ -12,6 +12,7 @@ pub enum Error {
     OfferCancelled = 4,
     FillExceedsRemaining = 5,
     Unauthorized = 6,
+    FillBelowMinimum = 7,
 }
 
 mod storage {
@@ -110,6 +111,7 @@ pub struct Offer {
     pub carbon_token: Address,
     pub usdc_token: Address,
     pub is_cancelled: bool,
+    pub min_fill_amount: i128,
 }
 
 impl Offer {
@@ -151,10 +153,11 @@ impl EscrowContract {
         usdc_amount: i128,
         carbon_token: Address,
         usdc_token: Address,
+        min_fill_amount: i128,
     ) -> Result<u64, Error> {
         seller.require_auth();
 
-        if carbon_amount <= 0 || usdc_amount <= 0 {
+        if carbon_amount <= 0 || usdc_amount <= 0 || min_fill_amount <= 0 {
             return Err(Error::InvalidAmount);
         }
 
@@ -173,6 +176,7 @@ impl EscrowContract {
             carbon_token: carbon_token.clone(),
             usdc_token: usdc_token.clone(),
             is_cancelled: false,
+            min_fill_amount,
         };
 
         storage::store_offer(&env, offer_id, &offer);
@@ -214,6 +218,11 @@ impl EscrowContract {
         let remaining_carbon = offer.remaining_carbon();
         if fill_carbon_amount > remaining_carbon {
             return Err(Error::FillExceedsRemaining);
+        }
+
+        // Allow fills below minimum only when consuming the entire remaining amount
+        if fill_carbon_amount < offer.min_fill_amount && fill_carbon_amount < remaining_carbon {
+            return Err(Error::FillBelowMinimum);
         }
 
         // Calculate proportional USDC amount, rounding up in favor of the seller
