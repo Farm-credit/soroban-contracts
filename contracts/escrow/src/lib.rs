@@ -110,6 +110,7 @@ pub struct Offer {
     pub carbon_token: Address,
     pub usdc_token: Address,
     pub is_cancelled: bool,
+    pub min_fill_amount: i128,
 }
 
 impl Offer {
@@ -157,6 +158,12 @@ impl EscrowContract {
         if carbon_amount <= 0 || usdc_amount <= 0 {
             return Err(Error::InvalidAmount);
         }
+        if min_fill_amount <= 0 {
+            panic!("min_fill_amount must be positive");
+        }
+        if min_fill_amount > carbon_amount {
+            panic!("min_fill_amount cannot exceed carbon_amount");
+        }
 
         storage::extend_ttl(&env);
 
@@ -173,11 +180,11 @@ impl EscrowContract {
             carbon_token: carbon_token.clone(),
             usdc_token: usdc_token.clone(),
             is_cancelled: false,
+            min_fill_amount,
         };
 
         storage::store_offer(&env, offer_id, &offer);
 
-        // Transfer Carbon tokens from seller to escrow using token interface
         let carbon_client = soroban_sdk::token::Client::new(&env, &carbon_token);
         carbon_client.transfer(&seller, &env.current_contract_address(), &carbon_amount);
 
@@ -224,7 +231,6 @@ impl EscrowContract {
         let usdc_client = soroban_sdk::token::Client::new(&env, &offer.usdc_token);
         usdc_client.transfer(&buyer, &env.current_contract_address(), &fill_usdc_amount);
 
-        // Transfer Carbon tokens from escrow to buyer
         let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
         carbon_client.transfer(&env.current_contract_address(), &buyer, &fill_carbon_amount);
 
@@ -235,7 +241,6 @@ impl EscrowContract {
             &fill_usdc_amount,
         );
 
-        // Update offer with filled amounts
         offer.filled_carbon += fill_carbon_amount;
         offer.filled_usdc += fill_usdc_amount;
 
