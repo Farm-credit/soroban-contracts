@@ -117,7 +117,7 @@ fn test_create_offer_happy_path() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     assert_eq!(offer_id, 1);
     // Seller's carbon reduced, escrow holds it
@@ -135,7 +135,7 @@ fn test_create_offer_zero_carbon_panics() {
     let s = setup();
     assert!(s
         .escrow
-        .try_create_offer(&s.seller, &0, &5000, &s.carbon_id, &s.usdc_id)
+        .try_create_offer(&s.seller, &0, &5000, &s.carbon_id, &s.usdc_id, &100)
         .is_err());
 }
 
@@ -144,7 +144,7 @@ fn test_create_offer_zero_usdc_panics() {
     let s = setup();
     assert!(s
         .escrow
-        .try_create_offer(&s.seller, &1000, &0, &s.carbon_id, &s.usdc_id)
+        .try_create_offer(&s.seller, &1000, &0, &s.carbon_id, &s.usdc_id, &100)
         .is_err());
 }
 
@@ -153,7 +153,7 @@ fn test_create_offer_negative_carbon_panics() {
     let s = setup();
     assert!(s
         .escrow
-        .try_create_offer(&s.seller, &-100, &5000, &s.carbon_id, &s.usdc_id)
+        .try_create_offer(&s.seller, &-100, &5000, &s.carbon_id, &s.usdc_id, &100)
         .is_err());
 }
 
@@ -161,7 +161,7 @@ fn test_create_offer_negative_carbon_panics() {
 fn test_create_offer_emits_event() {
     let s = setup();
     s.escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     // At least one event was emitted (offer_created + token transfer events)
     assert!(!s.env.events().all().is_empty());
 }
@@ -171,7 +171,7 @@ fn test_fill_offer_emits_event() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     let events_before = s.env.events().all().len();
     s.escrow.fill_offer(&offer_id, &s.buyer, &500);
     assert!(s.env.events().all().len() > events_before);
@@ -182,7 +182,7 @@ fn test_cancel_offer_emits_event() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     let events_before = s.env.events().all().len();
     s.escrow.cancel_offer(&offer_id, &s.seller);
     assert!(s.env.events().all().len() > events_before);
@@ -195,7 +195,7 @@ fn test_full_fill_happy_path() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &1000);
 
@@ -216,7 +216,7 @@ fn test_partial_fill() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &400);
 
@@ -236,7 +236,7 @@ fn test_multiple_partial_fills() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &300); // fill 1
     s.escrow.fill_offer(&offer_id, &s.buyer, &400); // fill 2
@@ -255,7 +255,7 @@ fn test_cancel_offer_returns_tokens() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     s.escrow.cancel_offer(&offer_id, &s.seller);
 
@@ -271,7 +271,7 @@ fn test_cancel_after_partial_fill() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
 
     s.escrow.fill_offer(&offer_id, &s.buyer, &300);
     s.escrow.cancel_offer(&offer_id, &s.seller);
@@ -294,7 +294,7 @@ fn test_fill_zero_amount_panics() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     assert!(s.escrow.try_fill_offer(&offer_id, &s.buyer, &0).is_err());
 }
 
@@ -303,7 +303,7 @@ fn test_fill_exceeds_remaining_panics() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     assert!(s.escrow.try_fill_offer(&offer_id, &s.buyer, &1001).is_err());
 }
 
@@ -312,7 +312,7 @@ fn test_fill_cancelled_offer_panics() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     s.escrow.cancel_offer(&offer_id, &s.seller);
     assert!(s.escrow.try_fill_offer(&offer_id, &s.buyer, &100).is_err());
 }
@@ -328,7 +328,7 @@ fn test_cancel_by_non_seller_panics() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     let non_seller = Address::generate(&s.env);
     assert!(s.escrow.try_cancel_offer(&offer_id, &non_seller).is_err());
 }
@@ -338,7 +338,7 @@ fn test_cancel_already_cancelled_panics() {
     let s = setup();
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &100);
     s.escrow.cancel_offer(&offer_id, &s.seller);
     assert!(s.escrow.try_cancel_offer(&offer_id, &s.seller).is_err());
 }
@@ -394,10 +394,54 @@ fn test_partial_fill_rounds_up_in_favor_of_seller() {
     // 3 carbon for 10_000 USDC; filling 1 carbon = 3333.33... → should round up to 3334
     let offer_id = s
         .escrow
-        .create_offer(&s.seller, &3, &10_000, &s.carbon_id, &s.usdc_id);
+        .create_offer(&s.seller, &3, &10_000, &s.carbon_id, &s.usdc_id, &1);
     s.escrow.fill_offer(&offer_id, &s.buyer, &1);
     assert_eq!(s.usdc.balance(&s.seller), 3334);
 }
 
 // ── Authorization ─────────────────────────────────────────────────────────────
 // Note: auth failures in soroban abort the process and cannot be caught with try_* methods.
+
+// ── min_fill_amount ───────────────────────────────────────────────────────────
+
+#[test]
+fn test_create_offer_zero_min_fill_panics() {
+    let s = setup();
+    assert!(s
+        .escrow
+        .try_create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &0)
+        .is_err());
+}
+
+#[test]
+fn test_fill_below_minimum_panics() {
+    let s = setup();
+    // min_fill_amount = 200; filling 100 (< 200) with 900 remaining should fail
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &200);
+    assert!(s.escrow.try_fill_offer(&offer_id, &s.buyer, &100).is_err());
+}
+
+#[test]
+fn test_final_fill_below_minimum_allowed() {
+    let s = setup();
+    // min_fill_amount = 200; after filling 900, only 100 remains — final fill allowed
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &200);
+    s.escrow.fill_offer(&offer_id, &s.buyer, &900);
+    // 100 remaining < min_fill_amount=200, but it's the full remainder — must succeed
+    s.escrow.fill_offer(&offer_id, &s.buyer, &100);
+    assert!(s.escrow.get_offer(&offer_id).is_none());
+}
+
+#[test]
+fn test_fill_exactly_minimum_succeeds() {
+    let s = setup();
+    let offer_id = s
+        .escrow
+        .create_offer(&s.seller, &1000, &5000, &s.carbon_id, &s.usdc_id, &200);
+    s.escrow.fill_offer(&offer_id, &s.buyer, &200);
+    assert_eq!(s.carbon.balance(&s.buyer), 200);
+}
