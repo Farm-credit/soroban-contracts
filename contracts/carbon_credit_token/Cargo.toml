@@ -20,3 +20,4 @@ rbac        = { path = "../rbac" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+rbac        = { path = "../rbac", features = ["testutils"] }

@@ -14,6 +14,9 @@ mod storage;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod integration_test;
+
 use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, String, Vec};
 
 use crate::admin::{
