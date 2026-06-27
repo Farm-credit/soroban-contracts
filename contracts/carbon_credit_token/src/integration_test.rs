@@ -32,7 +32,8 @@ mod integration_tests {
         // Deploy the real RBAC contract.
         let rbac_id = env.register_contract(None, RbacContract);
         let rbac = RbacContractClient::new(&env, &rbac_id);
-        rbac.initialize(&super_admin);
+        let admins = soroban_sdk::vec![&env, super_admin.clone()];
+        rbac.initialize(&admins, &1u32, &0u64);
 
         // Deploy the token contract wired to the real RBAC contract.
         let token_id = env.register_contract(None, CarbonCreditToken);
