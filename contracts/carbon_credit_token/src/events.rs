@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, Address, Bytes, Env, String};
 
 #[derive(Clone, Debug)]
 #[contracttype]
@@ -63,32 +63,79 @@ impl ApproveEvent {
 
 #[derive(Clone, Debug)]
 #[contracttype]
+pub struct RetirementData {
+    pub amount: i128,
+    pub timestamp: u64,
+    pub report_hash: Bytes,
+    pub methodology: String,
+}
+
+
+#[derive(Clone, Debug)]
+#[contracttype]
 pub struct RetirementEvent {
     pub from: Address,
     pub amount: i128,
     pub timestamp: u64,
+    pub report_hash: Bytes,
+    pub methodology: String,
 }
+
 
 impl RetirementEvent {
     pub fn publish(self, env: &Env) {
+        let data = RetirementData {
+            amount: self.amount,
+            timestamp: self.timestamp,
+            report_hash: self.report_hash,
+            methodology: self.methodology,
+        };
         env.events()
-            .publish((symbol_short!("retire"), self.from), (self.amount, self.timestamp));
+            .publish((symbol_short!("retire"), self.from), data);
     }
 }
 
 #[derive(Clone, Debug)]
 #[contracttype]
-pub struct CertificateMintedEvent {
-    pub id: u32,
-    pub owner: Address,
+pub struct CertificateGeneratedEvent {
+    pub certificate_id: u64,
+    pub corporate: Address,
     pub amount: i128,
+    pub timestamp: u64,
 }
 
-impl CertificateMintedEvent {
+impl CertificateGeneratedEvent {
     pub fn publish(self, env: &Env) {
         env.events().publish(
-            (symbol_short!("cert"), self.owner, self.id),
-            self.amount,
+            (symbol_short!("cert"), self.corporate, self.certificate_id),
+            (self.amount, self.timestamp),
         );
     }
 }
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct PauseEvent {
+    pub admin: Address,
+}
+
+impl PauseEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish((symbol_short!("paused"), self.admin), true);
+    }
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct UnpauseEvent {
+    pub admin: Address,
+}
+
+impl UnpauseEvent {
+    pub fn publish(self, env: &Env) {
+        env.events()
+            .publish((symbol_short!("unpaused"), self.admin), false);
+    }
+}
+
