@@ -9,7 +9,7 @@ use soroban_sdk::{contract, contractimpl, Address, Env, String};
 use storage::{
     is_initialized, is_verifier_registered, read_report, read_super_admin, read_verifier_profile,
     register_verifier, set_initialized, unregister_verifier, write_report, write_super_admin,
-    INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, ReportData, VerifierProfile,
+    ReportData, VerifierProfile, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
 };
 
 #[contract]
@@ -90,6 +90,46 @@ impl VerifierRegistry {
 
         unregister_verifier(&env, &verifier);
 
+        // Emit deactivation event for audit trail
+        env.events().publish(
+            (soroban_sdk::symbol_short!("deactiv"),),
+            &verifier,
+        );
+
+        Ok(())
+    }
+
+    /// Reactivates a previously deactivated verifier.
+    /// Only the SuperAdmin can call this.
+    pub fn reactivate_verifier(env: Env, verifier: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+
+        // Extend TTL for storage
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+
+        // Check if verifier profile exists
+        let mut profile = read_verifier_profile(&env, &verifier)
+            .ok_or(Error::VerifierNotRegistered)?;
+
+        // Check if already active
+        if profile.is_active && is_verifier_registered(&env, &verifier) {
+            return Err(Error::VerifierAlreadyActive);
+        }
+
+        // Reactivate the verifier
+        profile.is_active = true;
+        storage::write_verifier_profile(&env, &verifier, &profile);
+        register_verifier(&env, &verifier);
+
+        // Emit reactivation event for audit trail
+        env.events().publish(
+            (soroban_sdk::symbol_short!("reactiv"),),
+            &verifier,
+        );
+
         Ok(())
     }
 
@@ -117,11 +157,15 @@ impl VerifierRegistry {
             return Err(Error::VerifierNotRegistered);
         }
 
-        let report: ReportData = (verifier.clone(), metric_hash.clone(), env.ledger().sequence());
+        let report: ReportData = (
+            verifier.clone(),
+            metric_hash.clone(),
+            env.ledger().sequence(),
+        );
         write_report(&env, &farmer, &report);
 
         env.events().publish(
-            (soroban_sdk::symbol_short!("rpt_submit"),),
+            (soroban_sdk::symbol_short!("rpt_sub"),),
             (verifier, farmer, metric_hash),
         );
 
@@ -159,8 +203,12 @@ impl VerifierRegistry {
     // ── View functions ───────────────────────────────────────────────────────────
 
     /// Returns the verifier profile if registered.
-    pub fn get_verifier_profile(env: Env, verifier: Address) -> Option<(String, String, u32, bool)> {
-        read_verifier_profile(&env, &verifier).map(|p| (p.name, p.jurisdiction, p.registration_date, p.is_active))
+    pub fn get_verifier_profile(
+        env: Env,
+        verifier: Address,
+    ) -> Option<(String, String, u32, bool)> {
+        read_verifier_profile(&env, &verifier)
+            .map(|p| (p.name, p.jurisdiction, p.registration_date, p.is_active))
     }
 
     /// Returns true if the verifier is registered and active.
