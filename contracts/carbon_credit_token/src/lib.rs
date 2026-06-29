@@ -33,7 +33,7 @@ use crate::storage::{
     write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
     is_paused, set_paused,
 };
-
+use crate::storage::{read_certificates, read_certificate_count, write_certificate};
 
 fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     if amount < 0 {

@@ -1,11 +1,13 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Env,
+    Address, Env, contract, contractimpl, contracttype, panic_with_error
 };
+use crate::error::EscrowError;
 
 mod storage {
     use soroban_sdk::{Env, Address};
+
 
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
@@ -132,7 +134,7 @@ impl EscrowContract {
     pub fn initialize(env: Env, super_admin: Address) {
         storage::extend_ttl(&env);
         if storage::is_initialized(&env) {
-            panic!("escrow already initialized");
+            panic_with_error!(&env, EscrowError::AlreadyInitialized)
         }
         storage::set_initialized(&env);
         storage::write_super_admin(&env, &super_admin);
@@ -184,7 +186,8 @@ impl EscrowContract {
         require_not_paused(&env);
 
         if carbon_amount <= 0 || usdc_amount <= 0 {
-            panic!("amounts must be positive");
+            panic_with_error!(&env, EscrowError::AmountMustBePositive);
+
         }
 
         if expiration_ledger <= env.ledger().sequence() {
@@ -230,7 +233,7 @@ impl EscrowContract {
         require_not_paused(&env);
 
         if fill_carbon_amount <= 0 {
-            panic!("fill amount must be positive");
+            panic_with_error!(&env, EscrowError::AmountMustBePositive);
         }
 
         storage::extend_ttl(&env);
@@ -238,7 +241,7 @@ impl EscrowContract {
         let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
 
         if offer.is_cancelled {
-            panic!("offer is cancelled");
+            panic_with_error!(&env, EscrowError::OfferCancelled);
         }
 
         if offer.is_expired(env.ledger().sequence()) {
@@ -247,7 +250,7 @@ impl EscrowContract {
 
         let remaining_carbon = offer.remaining_carbon();
         if fill_carbon_amount > remaining_carbon {
-            panic!("fill amount exceeds remaining offer amount");
+            panic_with_error!(&env, EscrowError::InsufficientRemaining);
         }
 
         // Calculate proportional USDC amount
@@ -291,11 +294,12 @@ impl EscrowContract {
         let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
 
         if caller != offer.seller {
-            panic!("only the seller can cancel this offer");
+            panic_with_error!(&env, EscrowError::Unauthorized);
+
         }
 
         if offer.is_cancelled {
-            panic!("offer already cancelled");
+            panic_with_error!(&env, EscrowError::OfferCancelled);
         }
 
         let remaining_carbon = offer.remaining_carbon();
@@ -393,4 +397,5 @@ impl EscrowContract {
     }
 }
 
+mod error;
 mod test;
