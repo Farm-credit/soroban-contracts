@@ -22,17 +22,18 @@ use crate::balance::{read_balance, receive_balance, spend_balance};
 use crate::error::Error;
 use crate::events::{
     ApproveEvent, BurnEvent, CertificateGeneratedEvent, MintEvent, RetirementEvent, TransferEvent,
+    PauseEvent, UnpauseEvent,
 };
 
 use crate::metadata::{read_decimals, read_name, read_symbol, write_metadata};
 use crate::rbac::require_verifier;
 use crate::storage::{
-    increment_certificate_count, is_initialized, read_certificate_count, read_certificates,
-    read_total_retired, read_total_supply, set_initialized, write_certificate, write_rbac_contract,
-    write_total_retired, write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD,
-    OffsetCertificate,
+    increment_certificate_count, is_initialized, is_report_hash_used, mark_report_hash_used, read_total_retired,
+    read_total_supply, set_initialized, write_rbac_contract, write_total_retired,
+    write_total_supply, INSTANCE_BUMP_AMOUNT, INSTANCE_LIFETIME_THRESHOLD, OffsetCertificate,
+    is_paused, set_paused,
 };
-
+use crate::storage::{read_certificates, read_certificate_count, write_certificate};
 
 fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     if amount < 0 {
@@ -42,10 +43,17 @@ fn check_nonnegative_amount(amount: i128) -> Result<(), Error> {
     }
 }
 
-/// Rejects the call if `addr` is on the blacklist.
 fn require_not_blacklisted(env: &Env, addr: &Address) -> Result<(), Error> {
     if is_blacklisted(env, addr) {
         Err(Error::Blacklisted)
+    } else {
+        Ok(())
+    }
+}
+
+fn require_not_paused(env: &Env) -> Result<(), Error> {
+    if is_paused(env) {
+        Err(Error::ContractPaused)
     } else {
         Ok(())
     }
@@ -72,7 +80,6 @@ impl CarbonCreditToken {
 
         set_initialized(&env);
         write_administrator(&env, &admin);
-        // The initial admin is also the SuperAdmin.
         write_super_admin(&env, &admin);
         write_rbac_contract(&env, &rbac_contract);
         write_metadata(&env, name, symbol, decimals);
@@ -83,11 +90,10 @@ impl CarbonCreditToken {
 
     // ── RBAC management (SuperAdmin only) ────────────────────────────────────
 
-    /// Grants the Verifier role to `verifier`.
-    /// Only the SuperAdmin may call this.
     pub fn add_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
@@ -97,11 +103,10 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    /// Revokes the Verifier role from `verifier`.
-    /// Only the SuperAdmin may call this.
     pub fn remove_verifier(env: Env, verifier: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
+        require_not_paused(&env)?;
 
         env.storage()
             .instance()
@@ -111,10 +116,6 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    /// Blacklists `target`.
-    /// Only the SuperAdmin may call this.
-    /// The SuperAdmin cannot blacklist themselves — they must transfer the
-    /// role first via `transfer_super_admin`.
     pub fn blacklist(env: Env, target: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
@@ -131,8 +132,6 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    /// Removes `target` from the blacklist.
-    /// Only the SuperAdmin may call this.
     pub fn unblacklist(env: Env, target: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
@@ -145,8 +144,6 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    /// Transfers the SuperAdmin role to `successor`.
-    /// Only the current SuperAdmin may call this.
     pub fn transfer_super_admin(env: Env, successor: Address) -> Result<(), Error> {
         let super_admin = read_super_admin(&env);
         super_admin.require_auth();
@@ -163,31 +160,68 @@ impl CarbonCreditToken {
         Ok(())
     }
 
+    // ── Pause / emergency stop (SuperAdmin only) ──────────────────────────────
+
+    /// Pauses all state-mutating operations. SuperAdmin only.
+    pub fn admin_pause(env: Env, admin: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+        if admin != super_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        set_paused(&env, true);
+        PauseEvent { admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Unpauses the contract. SuperAdmin only.
+    pub fn admin_unpause(env: Env, admin: Address) -> Result<(), Error> {
+        let super_admin = read_super_admin(&env);
+        super_admin.require_auth();
+        if admin != super_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+        set_paused(&env, false);
+        UnpauseEvent { admin }.publish(&env);
+        Ok(())
+    }
+
+    /// Returns whether the contract is currently paused.
+    pub fn paused(env: Env) -> bool {
+        is_paused(&env)
+    }
+
     // ── Token operations ──────────────────────────────────────────────────────
 
-    /// Mints tokens to `to` (requires Verifier role from external RBAC).
-    pub fn mint(env: Env, verifier: Address, to: Address, amount: i128) -> Result<(), Error> {
+    pub fn mint(env: Env, verifier: Address, to: Address, amount: i128, report_hash: Bytes) -> Result<(), Error> {
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &verifier)?;
         require_not_blacklisted(&env, &to)?;
 
-        // Records auth + validates external RBAC.
         require_verifier(&env, &verifier);
 
         env.storage()
             .instance()
             .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 
+        if is_report_hash_used(&env, &report_hash) {
+            return Err(Error::ReportHashUsed);
+        }
+        mark_report_hash_used(&env, &report_hash);
+
         receive_balance(&env, to.clone(), amount);
 
         let new_supply = read_total_supply(&env) + amount;
         write_total_supply(&env, new_supply);
 
-        MintEvent {
-            to: to.clone(),
-            amount,
-        }
-        .publish(&env);
+        MintEvent { to, amount }.publish(&env);
         Ok(())
     }
 
@@ -196,6 +230,7 @@ impl CarbonCreditToken {
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
         require_not_blacklisted(&env, &to)?;
 
@@ -206,16 +241,10 @@ impl CarbonCreditToken {
         spend_balance(&env, from.clone(), amount)?;
         receive_balance(&env, to.clone(), amount);
 
-        TransferEvent {
-            from: from.clone(),
-            to: to.clone(),
-            amount,
-        }
-        .publish(&env);
+        TransferEvent { from, to, amount }.publish(&env);
         Ok(())
     }
 
-    /// Transfers tokens using allowance.
     pub fn transfer_from(
         env: Env,
         spender: Address,
@@ -225,6 +254,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         spender.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &spender)?;
         require_not_blacklisted(&env, &from)?;
         require_not_blacklisted(&env, &to)?;
@@ -238,15 +268,19 @@ impl CarbonCreditToken {
         receive_balance(&env, to.clone(), amount);
 
         TransferEvent { from, to, amount }.publish(&env);
-
         Ok(())
     }
 
-    /// Retires (burns) tokens to claim carbon offset.
-    /// Emits a special RetirementEvent with timestamp.
-    pub fn retire(env: Env, from: Address, amount: i128) -> Result<(), Error> {
+    pub fn retire(
+        env: Env,
+        from: Address,
+        amount: i128,
+        report_hash: Bytes,
+        methodology: String,
+    ) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         if amount == 0 {
@@ -279,6 +313,8 @@ impl CarbonCreditToken {
             from: from.clone(),
             amount,
             timestamp,
+            report_hash,
+            methodology,
         }
         .publish(&env);
 
@@ -300,6 +336,7 @@ impl CarbonCreditToken {
     pub fn burn(env: Env, from: Address, amount: i128) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         env.storage()
@@ -312,11 +349,9 @@ impl CarbonCreditToken {
         write_total_supply(&env, new_supply);
 
         BurnEvent { from, amount }.publish(&env);
-
         Ok(())
     }
 
-    /// Burns tokens using allowance.
     pub fn burn_from(
         env: Env,
         spender: Address,
@@ -325,6 +360,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         spender.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &spender)?;
         require_not_blacklisted(&env, &from)?;
 
@@ -339,7 +375,6 @@ impl CarbonCreditToken {
         write_total_supply(&env, new_supply);
 
         BurnEvent { from, amount }.publish(&env);
-
         Ok(())
     }
 
@@ -352,6 +387,7 @@ impl CarbonCreditToken {
     ) -> Result<(), Error> {
         from.require_auth();
         check_nonnegative_amount(amount)?;
+        require_not_paused(&env)?;
         require_not_blacklisted(&env, &from)?;
 
         env.storage()
@@ -376,19 +412,14 @@ impl CarbonCreditToken {
         Ok(())
     }
 
-    // ============ VIEW FUNCTIONS ============
-
-    /// Returns `true` if `addr` holds the Verifier role.
     pub fn is_verifier(env: Env, addr: Address) -> bool {
         is_verifier(&env, &addr)
     }
 
-    /// Returns `true` if `addr` is blacklisted.
     pub fn is_blacklisted(env: Env, addr: Address) -> bool {
         is_blacklisted(&env, &addr)
     }
 
-    /// Returns the balance of an address.
     pub fn balance(env: Env, id: Address) -> i128 {
         env.storage()
             .instance()

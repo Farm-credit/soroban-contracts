@@ -58,6 +58,9 @@ pub enum DataKey {
     VerifierRegistry,
     UsedReportHash(Bytes),
 
+    // Pause flag
+    Paused,
+
     // Offset Certificates
     CertificateCount,
     Certificates(Address),
@@ -182,6 +185,30 @@ pub fn write_total_retired(e: &Env, amount: i128) {
         .set(&DataKey::TotalRetired, &amount);
 }
 
+pub fn read_verifier_registry(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .get(&DataKey::VerifierRegistry)
+        .expect("verifier registry address not set")
+}
+
+pub fn write_verifier_registry(e: &Env, registry: &Address) {
+    e.storage()
+        .instance()
+        .set(&DataKey::VerifierRegistry, registry);
+}
+
+pub fn is_report_hash_used(e: &Env, hash: &Bytes) -> bool {
+    e.storage()
+        .instance()
+        .has(&DataKey::UsedReportHash(hash.clone()))
+}
+
+pub fn mark_report_hash_used(e: &Env, hash: &Bytes) {
+    e.storage()
+        .instance()
+        .set(&DataKey::UsedReportHash(hash.clone()), &true);
+}
 // ── Offset Certificates ────────────────────────────────────────────────────────
 pub fn read_certificate_count(e: &Env) -> u64 {
     e.storage()
@@ -217,5 +244,17 @@ pub fn write_certificate(e: &Env, corporate: Address, cert: OffsetCertificate) {
     e.storage()
         .persistent()
         .extend_ttl(&DataKey::Certificates(corporate.clone()), 17280, 518400);
+}
+
+// ── Pause ──────────────────────────────────────────────────────────────────────
+pub fn is_paused(e: &Env) -> bool {
+    e.storage()
+        .instance()
+        .get::<DataKey, bool>(&DataKey::Paused)
+        .unwrap_or(false)
+}
+
+pub fn set_paused(e: &Env, paused: bool) {
+    e.storage().instance().set(&DataKey::Paused, &paused);
 }
 
