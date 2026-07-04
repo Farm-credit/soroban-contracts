@@ -1,5 +1,9 @@
 #![no_std]
 
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
+
+mod storage {
+    use soroban_sdk::{Address, Env, Vec};
 use soroban_sdk::{
     Address, Env, contract, contractimpl, contracttype, panic_with_error
 };
@@ -8,15 +12,16 @@ use crate::error::EscrowError;
 mod storage {
     use soroban_sdk::{Env, Address};
 
-
     const INSTANCE_BUMP_AMOUNT: u32 = 16777215;
     const INSTANCE_LIFETIME_THRESHOLD: u32 = 10368000;
 
     const OFFERS_PREFIX: &str = "offers";
     const OFFER_COUNT_KEY: &str = "offer_count";
     const INITIALIZED_KEY: &str = "initialized";
+=======
     const PAUSED_KEY: &str = "paused";
     const SUPER_ADMIN_KEY: &str = "super_admin";
+>>>>>>> base/main
 
     pub fn extend_ttl(env: &Env) {
         env.storage()
@@ -60,13 +65,77 @@ mod storage {
         let key = (OFFERS_PREFIX.as_bytes(), offer_id);
         env.storage().instance().remove(&key);
     }
+<<<<<<< HEAD
+
+    pub fn scan_offer_ids(env: &Env, start: u64, limit: u64) -> Vec<u64> {
+        let mut ids = Vec::new(env);
+        if limit == 0 {
+            return ids;
+        }
+
+        let mut offer_id = if start == 0 { 1 } else { start };
+        let max_offer_id = read_offer_count(env);
+        let max_items = if limit > u64::from(u32::MAX) {
+            u32::MAX
+        } else {
+            limit as u32
+        };
+
+        while offer_id <= max_offer_id {
+            if get_offer(env, offer_id).is_some() {
+                ids.push_back(offer_id);
+                if ids.len() >= max_items {
+                    break;
+                }
+            }
+
+            if offer_id == u64::MAX {
+                break;
+            }
+            offer_id += 1;
+        }
+
+        ids
+    }
+
+    pub fn scan_offer_ids_by_seller(env: &Env, seller: &Address) -> Vec<u64> {
+        let mut ids = Vec::new(env);
+        let max_offer_id = read_offer_count(env);
+        let mut offer_id = 1u64;
+
+        while offer_id <= max_offer_id {
+            if let Some(offer) = get_offer(env, offer_id) {
+                if offer.seller == *seller {
+                    ids.push_back(offer.offer_id);
+                }
+            }
+
+            if offer_id == u64::MAX {
+                break;
+            }
+            offer_id += 1;
+        }
+
+        ids
+    }
+}
+
+mod events {
+    use soroban_sdk::{contracttype, Address};
+
+    #[derive(Clone)]
+    #[contracttype]
+    pub struct OfferCreatedEvent {
+        pub offer_id: u64,
+        pub seller: Address,
+        pub carbon_amount: i128,
+        pub usdc_amount: i128,
 
     pub fn is_paused(env: &Env) -> bool {
         env.storage()
             .instance()
             .get::<_, bool>(&PAUSED_KEY)
-            .unwrap_or(false)
-    }
+            .unwrap_or(false)    }
 
     pub fn set_paused(env: &Env, paused: bool) {
         env.storage().instance().set(&PAUSED_KEY, &paused);
@@ -113,6 +182,8 @@ impl Offer {
         self.filled_carbon >= self.carbon_amount
     }
 
+    pub fn is_active(&self) -> bool {
+        !self.is_cancelled && !self.is_fully_filled()
     pub fn is_expired(&self, current_ledger: u32) -> bool {
         current_ledger > self.expiration_ledger
     }
@@ -120,8 +191,7 @@ impl Offer {
 
 fn require_not_paused(env: &Env) {
     if storage::is_paused(env) {
-        panic!("contract is paused");
-    }
+        panic!("contract is paused");    }
 }
 
 #[contract]
@@ -129,14 +199,19 @@ pub struct EscrowContract;
 
 #[contractimpl]
 impl EscrowContract {
+    /// Initialize the escrow contract.
+    pub fn initialize(env: Env) {
     /// Initialize the escrow contract. `super_admin` is the only address
     /// that can pause/unpause the contract.
-    pub fn initialize(env: Env, super_admin: Address) {
-        storage::extend_ttl(&env);
+    pub fn initialize(env: Env, super_admin: Address) {        storage::extend_ttl(&env);
         if storage::is_initialized(&env) {
             panic_with_error!(&env, EscrowError::AlreadyInitialized)
         }
         storage::set_initialized(&env);
+        storage::write_offer_count(&env, 0);
+    }
+
+    /// Create a new offer - seller deposits Carbon tokens into escrow.
         storage::write_super_admin(&env, &super_admin);
         storage::write_offer_count(&env, 0);
     }
@@ -171,8 +246,7 @@ impl EscrowContract {
     }
 
     /// Create a new offer - seller deposits Carbon tokens into escrow.
-    /// `expiration_ledger` sets the ledger number after which the offer expires.
-    /// Returns the offer_id.
+    /// `expiration_ledger` sets the ledger number after which the offer expires.    /// Returns the offer_id.
     pub fn create_offer(
         env: Env,
         seller: Address,
@@ -183,7 +257,9 @@ impl EscrowContract {
         expiration_ledger: u32,
     ) -> u64 {
         seller.require_auth();
+=======
         require_not_paused(&env);
+>>>>>>> base/main
 
         if carbon_amount <= 0 || usdc_amount <= 0 {
             panic_with_error!(&env, EscrowError::AmountMustBePositive);
@@ -214,21 +290,27 @@ impl EscrowContract {
 
         storage::store_offer(&env, offer_id, &offer);
 
-        // Transfer Carbon tokens from seller to escrow
-        let carbon_client = soroban_sdk::token::Client::new(&env, &carbon_token);
+<<<<<<< HEAD
+        // Transfer Carbon tokens from seller to escrow.
+        // Transfer Carbon tokens from seller to escrow        let carbon_client = soroban_sdk::token::Client::new(&env, &carbon_token);
         carbon_client.transfer(&seller, &env.current_contract_address(), &carbon_amount);
 
         env.events().publish(
             ("offer_created",),
-            (offer_id, seller.clone(), carbon_amount, usdc_amount),
+            events::OfferCreatedEvent {
+                offer_id,
+                seller,
+                carbon_amount,
+                usdc_amount,
+            },
         );
 
         offer_id
     }
 
     /// Fill an offer - buyer pays USDC and receives Carbon tokens.
-    /// Supports partial fills. Rejects fills on expired offers.
-    pub fn fill_offer(env: Env, offer_id: u64, buyer: Address, fill_carbon_amount: i128) {
+    /// Supports partial fills - amount specifies how much carbon to buy.
+    /// Supports partial fills. Rejects fills on expired offers.    pub fn fill_offer(env: Env, offer_id: u64, buyer: Address, fill_carbon_amount: i128) {
         buyer.require_auth();
         require_not_paused(&env);
 
@@ -238,8 +320,11 @@ impl EscrowContract {
 
         storage::extend_ttl(&env);
 
+        let mut offer = match storage::get_offer(&env, offer_id) {
+            Some(offer) => offer,
+            None => panic!("offer not found"),
+        };
         let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
-
         if offer.is_cancelled {
             panic_with_error!(&env, EscrowError::OfferCancelled);
         }
@@ -253,21 +338,23 @@ impl EscrowContract {
             panic_with_error!(&env, EscrowError::InsufficientRemaining);
         }
 
+        // Proportional USDC amount: (fill_carbon / carbon_amount) * usdc_amount.
+        let fill_usdc_amount = (fill_carbon_amount * offer.usdc_amount) / offer.carbon_amount;
+
+        // Transfer USDC from buyer to escrow.
         // Calculate proportional USDC amount
         let fill_usdc_amount = (fill_carbon_amount * offer.usdc_amount) / offer.carbon_amount;
 
-        // Transfer USDC from buyer to escrow
-        let usdc_client = soroban_sdk::token::Client::new(&env, &offer.usdc_token);
+        // Transfer USDC from buyer to escrow        let usdc_client = soroban_sdk::token::Client::new(&env, &offer.usdc_token);
         usdc_client.transfer(&buyer, &env.current_contract_address(), &fill_usdc_amount);
 
-        // Transfer Carbon tokens from escrow to buyer
+        // Transfer Carbon from escrow to buyer.
         let carbon_client = soroban_sdk::token::Client::new(&env, &offer.carbon_token);
         carbon_client.transfer(&env.current_contract_address(), &buyer, &fill_carbon_amount);
 
-        // Transfer USDC from escrow to seller
+        // Transfer USDC from escrow to seller.
         usdc_client.transfer(&env.current_contract_address(), &offer.seller, &fill_usdc_amount);
 
-        // Update offer with filled amounts
         offer.filled_carbon += fill_carbon_amount;
         offer.filled_usdc += fill_usdc_amount;
 
@@ -279,7 +366,12 @@ impl EscrowContract {
 
         env.events().publish(
             ("offer_filled",),
-            (offer_id, buyer.clone(), fill_carbon_amount, fill_usdc_amount),
+            events::OfferFilledEvent {
+                offer_id,
+                buyer,
+                filled_carbon: fill_carbon_amount,
+                filled_usdc: fill_usdc_amount,
+            },
         );
     }
 
@@ -287,12 +379,17 @@ impl EscrowContract {
     /// Returns remaining carbon tokens to seller.
     pub fn cancel_offer(env: Env, offer_id: u64, caller: Address) {
         caller.require_auth();
+        storage::extend_ttl(&env);
+
+        let mut offer = match storage::get_offer(&env, offer_id) {
+            Some(offer) => offer,
+            None => panic!("offer not found"),
+        };
         require_not_paused(&env);
 
         storage::extend_ttl(&env);
 
         let mut offer = storage::get_offer(&env, offer_id).expect("offer not found");
-
         if caller != offer.seller {
             panic_with_error!(&env, EscrowError::Unauthorized);
 
@@ -313,10 +410,15 @@ impl EscrowContract {
 
         env.events().publish(
             ("offer_cancelled",),
-            (offer_id, offer.seller.clone(), remaining_carbon),
+            events::OfferCancelledEvent {
+                offer_id,
+                seller: offer.seller,
+                remaining_carbon,
+            },
         );
     }
 
+    /// Get offer details by ID.
     /// Reclaim tokens from an expired offer.
     /// Anyone can call this, but tokens always return to the seller.
     /// Cleans up ledger storage for the expired offer.
@@ -380,13 +482,12 @@ impl EscrowContract {
         );
     }
 
-    /// Get offer details
-    pub fn get_offer(env: Env, offer_id: u64) -> Option<Offer> {
+    /// Get offer details    pub fn get_offer(env: Env, offer_id: u64) -> Option<Offer> {
         storage::extend_ttl(&env);
         storage::get_offer(&env, offer_id)
     }
 
-    /// Get remaining amount for an offer
+    /// Get remaining carbon/usdc amount for an offer.
     pub fn get_remaining_amount(env: Env, offer_id: u64) -> (i128, i128) {
         storage::extend_ttl(&env);
         if let Some(offer) = storage::get_offer(&env, offer_id) {
@@ -394,6 +495,76 @@ impl EscrowContract {
         } else {
             (0, 0)
         }
+    }
+
+    /// Total number of created offers (monotonic counter).
+    pub fn get_offer_count(env: Env) -> u64 {
+        storage::extend_ttl(&env);
+        storage::read_offer_count(&env)
+    }
+
+    /// List active offers using offer-id cursor pagination.
+    /// Active = not cancelled and not fully filled.
+    pub fn get_active_offers(env: Env, start: u64, limit: u64) -> Vec<Offer> {
+        storage::extend_ttl(&env);
+        let mut offers = Vec::new(&env);
+        if limit == 0 {
+            return offers;
+        }
+
+        let ids = storage::scan_offer_ids(&env, start, limit);
+        for id in ids {
+            if let Some(offer) = storage::get_offer(&env, id) {
+                if offer.is_active() {
+                    offers.push_back(offer);
+                }
+            }
+        }
+        offers
+    }
+
+    /// List offer IDs created by a seller.
+    pub fn get_offers_by_seller(env: Env, seller: Address) -> Vec<u64> {
+        storage::extend_ttl(&env);
+        storage::scan_offer_ids_by_seller(&env, &seller)
+    }
+
+    /// List active offer IDs filtered by carbon/usdc token pair.
+    pub fn get_offers_by_token_pair(
+        env: Env,
+        carbon_token: Address,
+        usdc_token: Address,
+        start: u64,
+        limit: u64,
+    ) -> Vec<u64> {
+        storage::extend_ttl(&env);
+        let mut ids = Vec::new(&env);
+        if limit == 0 {
+            return ids;
+        }
+
+        let max_items = if limit > u64::from(u32::MAX) {
+            u32::MAX
+        } else {
+            limit as u32
+        };
+
+        let scan_ids = storage::scan_offer_ids(&env, start, limit);
+        for id in scan_ids {
+            if let Some(offer) = storage::get_offer(&env, id) {
+                if offer.is_active()
+                    && offer.carbon_token == carbon_token
+                    && offer.usdc_token == usdc_token
+                {
+                    ids.push_back(offer.offer_id);
+                    if ids.len() >= max_items {
+                        break;
+                    }
+                }
+            }
+        }
+
+        ids
     }
 }
 
